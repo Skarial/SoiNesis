@@ -36,9 +36,14 @@ class JournalRepository(Protocol):
 
 
 class UnitOfWork(Protocol):
-    observations: ObservationRepository
-    memories: MemoryRepository
-    journal: JournalRepository
+    @property
+    def observations(self) -> ObservationRepository: ...
+
+    @property
+    def memories(self) -> MemoryRepository: ...
+
+    @property
+    def journal(self) -> JournalRepository: ...
 
     def __enter__(self) -> Self: ...
 
