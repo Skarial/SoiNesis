@@ -8,7 +8,7 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
-from typing import Self
+from typing import Any, Self, cast
 
 from soinesis.domain.models import (
     AutobiographicalMemory,
@@ -23,9 +23,7 @@ from soinesis.domain.models import (
 
 def _normalise_search_text(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", value.casefold())
-    return "".join(
-        character for character in decomposed if not unicodedata.combining(character)
-    )
+    return "".join(character for character in decomposed if not unicodedata.combining(character))
 
 
 def _search_tokens(query: str) -> tuple[str, ...]:
@@ -300,7 +298,7 @@ def _memory_from_row(row: sqlite3.Row) -> AutobiographicalMemory:
 
 
 def _journal_event_from_row(row: sqlite3.Row) -> JournalEvent:
-    raw_value = json.loads(row["new_value_json"])
+    raw_value = cast(object, json.loads(row["new_value_json"]))
     if not isinstance(raw_value, dict):
         raise ValueError("Le contenu JSON d'un événement doit être un objet.")
 
@@ -313,5 +311,5 @@ def _journal_event_from_row(row: sqlite3.Row) -> JournalEvent:
         target_entity_id=row["target_entity_id"],
         occurred_at=datetime.fromisoformat(row["occurred_at"]),
         reason=row["reason"],
-        new_value=raw_value,
+        new_value=cast(dict[str, Any], raw_value),
     )
