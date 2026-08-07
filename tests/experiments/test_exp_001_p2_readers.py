@@ -117,6 +117,7 @@ def test_condition_a_exposes_no_persistent_history() -> None:
     prediction = NoHistoryCondition().inspect(query)
 
     assert prediction.current_value is None
+    assert prediction.unresolved_contradiction is None
     assert prediction.historical_value is None
     assert prediction.ordered_values == ()
     assert prediction.transition_source is None
@@ -156,6 +157,8 @@ def test_b_and_c_reconstruct_a_resolved_contradiction_without_ground_truth(
         assert prediction.transition_cycle_id == "fixture-resolved-cycle-004"
 
     assert len(c.retrieved_memory_ids) == 3
+    assert c.repository_access_count == 1
+    assert c.ablation_enabled is False
 
 
 def test_b_and_c_preserve_an_unresolved_contradiction(tmp_path: Path) -> None:
@@ -210,3 +213,46 @@ def test_condition_b_remains_textual_and_contains_no_structured_identifiers() ->
     assert "DEDUCTION" not in history
     assert "fixture-text:fixture-belief" not in history
     assert "memory_" not in history
+
+
+def test_targeted_ablation_never_reads_revision_metadata_and_degrades_state_tasks(
+    tmp_path: Path,
+) -> None:
+    dataset = _fixture_dataset(
+        dataset_id="fixture-ablation",
+        family=ChainFamily.S4_CONTRADICTION_RESOLUTION,
+        subject="Couleur du témoin d'ablation",
+        kinds=(
+            EventKind.INITIAL,
+            EventKind.CONTRADICTION,
+            EventKind.CONFIRMATION,
+            EventKind.RESOLUTION,
+        ),
+        values=("rouge", "bleu", "bleu", "vert"),
+        historical_event_number=2,
+    )
+    query = build_query(dataset.chains[0])
+    structured = StructuredHistoryCondition(dataset, tmp_path / "ablation.db")
+
+    ablated = structured.inspect_ablated(query)
+
+    assert structured.revision_metadata_access_count == 0
+    assert ablated.repository_access_count == 0
+    assert ablated.ablation_enabled is True
+    assert ablated.current_value is None
+    assert ablated.unresolved_contradiction is None
+    assert ablated.contested_values == ()
+    assert ablated.historical_value is None
+    assert ablated.historical_contested_values == ()
+    assert ablated.ordered_values == ("rouge", "bleu", "bleu", "vert")
+    assert ablated.transition_reason is None
+    assert ablated.transition_source is SourceType.JORDAN_INPUT
+    assert ablated.transition_cycle_id == "fixture-ablation-cycle-004"
+    assert ablated.retrieved_memory_ids == ()
+
+    normal = structured.inspect(query)
+
+    assert structured.revision_metadata_access_count == 1
+    assert normal.repository_access_count == 1
+    assert normal.current_value == "vert"
+    assert normal.ordered_values == ("rouge", "bleu", "vert")
