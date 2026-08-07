@@ -57,9 +57,7 @@ def audit_structured_consistency(
     expected_versions = tuple(
         event for event in dataset.events if event.kind is not EventKind.CONFIRMATION
     )
-    confirmations = tuple(
-        event for event in dataset.events if event.kind is EventKind.CONFIRMATION
-    )
+    confirmations = tuple(event for event in dataset.events if event.kind is EventKind.CONFIRMATION)
     revisions = tuple(
         event
         for event in dataset.events
@@ -138,7 +136,9 @@ def audit_structured_consistency(
         elif event.kind is EventKind.CONFIRMATION:
             expected_journal_by_cycle[(event.cycle_id, EventType.MEMORY_CONFIRMED.value)] += 1
         else:
-            expected_journal_by_cycle[(event.cycle_id, EventType.MEMORY_REVISION_CREATED.value)] += 1
+            expected_journal_by_cycle[
+                (event.cycle_id, EventType.MEMORY_REVISION_CREATED.value)
+            ] += 1
             expected_journal_by_cycle[(event.cycle_id, EventType.MEMORY_STATUS_CHANGED.value)] += (
                 expected_status_by_cycle[event.cycle_id]
             )
@@ -155,15 +155,12 @@ def audit_structured_consistency(
         f"{cycle_id}:{event_type}" for cycle_id, event_type in differing_journal_keys
     )
 
-    observation_count_valid = (
-        len(observations) == len(dataset.events)
-        and Counter(str(row["cycle_id"]) for row in observations)
-        == Counter(event.cycle_id for event in dataset.events)
-    )
+    observation_count_valid = len(observations) == len(dataset.events) and Counter(
+        str(row["cycle_id"]) for row in observations
+    ) == Counter(event.cycle_id for event in dataset.events)
     version_count_valid = len(memories) == len(expected_versions)
     confirmation_invariant_valid = (
-        len(confirmations) == actual_confirmation_count
-        and not confirmation_cycles_with_versions
+        len(confirmations) == actual_confirmation_count and not confirmation_cycles_with_versions
     )
     parent_links_valid = not invalid_parent_links
     expected_status_change_count = sum(expected_status_by_cycle.values())

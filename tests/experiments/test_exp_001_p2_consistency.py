@@ -184,7 +184,5 @@ def test_consistency_audit_detects_missing_transition_journal_entry(tmp_path: Pa
 
     assert audit.journal_trace_valid is False
     assert audit.actual_status_change_count == 2
-    assert (
-        f"{resolution_cycle}:MEMORY_STATUS_CHANGED" in audit.missing_or_extra_journal_cycles
-    )
+    assert f"{resolution_cycle}:MEMORY_STATUS_CHANGED" in audit.missing_or_extra_journal_cycles
     assert audit.all_valid is False
