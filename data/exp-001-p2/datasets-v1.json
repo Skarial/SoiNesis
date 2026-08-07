@@ -1,0 +1,315 @@
+{
+  "version": "1.0",
+  "source_order": [
+    "JORDAN_INPUT",
+    "EXTERNAL_TOOL",
+    "DEDUCTION"
+  ],
+  "datasets": [
+    {
+      "id": "p2-dataset-01",
+      "namespace": "Orion",
+      "source_offset": 0
+    },
+    {
+      "id": "p2-dataset-02",
+      "namespace": "Lyra",
+      "source_offset": 1
+    },
+    {
+      "id": "p2-dataset-03",
+      "namespace": "Vega",
+      "source_offset": 2
+    },
+    {
+      "id": "p2-dataset-04",
+      "namespace": "Nadir",
+      "source_offset": 0
+    },
+    {
+      "id": "p2-dataset-05",
+      "namespace": "Solis",
+      "source_offset": 1
+    }
+  ],
+  "chains": [
+    {
+      "slot": 1,
+      "family": "S1_SIMPLE_CORRECTION",
+      "subject_template": "La couleur du repère {namespace}-Alpha",
+      "values": [
+        "ambre",
+        "ambre",
+        "bleu",
+        "bleu"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CONFIRMATION",
+        "CORRECTION",
+        "CONFIRMATION"
+      ],
+      "historical_event_number": 2,
+      "misleading_value": null
+    },
+    {
+      "slot": 2,
+      "family": "S1_SIMPLE_CORRECTION",
+      "subject_template": "Le niveau du canal {namespace}-Beta",
+      "values": [
+        "bas",
+        "bas",
+        "haut",
+        "haut"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CONFIRMATION",
+        "CORRECTION",
+        "CONFIRMATION"
+      ],
+      "historical_event_number": 2,
+      "misleading_value": null
+    },
+    {
+      "slot": 3,
+      "family": "S2_MULTIPLE_REVISIONS",
+      "subject_template": "La zone assignée à {namespace}-Gamma",
+      "values": [
+        "nord",
+        "est",
+        "sud",
+        "ouest"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CORRECTION",
+        "CORRECTION",
+        "CORRECTION"
+      ],
+      "historical_event_number": 2,
+      "misleading_value": null
+    },
+    {
+      "slot": 4,
+      "family": "S2_MULTIPLE_REVISIONS",
+      "subject_template": "Le code de référence {namespace}-Delta",
+      "values": [
+        "Kappa",
+        "Lambda",
+        "Mu",
+        "Nu"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CORRECTION",
+        "CORRECTION",
+        "CORRECTION"
+      ],
+      "historical_event_number": 3,
+      "misleading_value": null
+    },
+    {
+      "slot": 5,
+      "family": "S3_UNRESOLVED_CONTRADICTION",
+      "subject_template": "L'orientation du module {namespace}-Epsilon",
+      "values": [
+        "gauche",
+        "gauche",
+        "droite",
+        "droite"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CONFIRMATION",
+        "CONTRADICTION",
+        "CONFIRMATION"
+      ],
+      "historical_event_number": 3,
+      "misleading_value": null
+    },
+    {
+      "slot": 6,
+      "family": "S3_UNRESOLVED_CONTRADICTION",
+      "subject_template": "Le statut du signal {namespace}-Zeta",
+      "values": [
+        "stable",
+        "stable",
+        "instable",
+        "instable"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CONFIRMATION",
+        "CONTRADICTION",
+        "CONFIRMATION"
+      ],
+      "historical_event_number": 2,
+      "misleading_value": null
+    },
+    {
+      "slot": 7,
+      "family": "S4_CONTRADICTION_RESOLUTION",
+      "subject_template": "La priorité du dossier {namespace}-Eta",
+      "values": [
+        "faible",
+        "forte",
+        "forte",
+        "moyenne"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CONTRADICTION",
+        "CONFIRMATION",
+        "RESOLUTION"
+      ],
+      "historical_event_number": 2,
+      "misleading_value": null
+    },
+    {
+      "slot": 8,
+      "family": "S4_CONTRADICTION_RESOLUTION",
+      "subject_template": "Le mode du capteur {namespace}-Theta",
+      "values": [
+        "veille",
+        "actif",
+        "actif",
+        "maintenance"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CONTRADICTION",
+        "CONFIRMATION",
+        "RESOLUTION"
+      ],
+      "historical_event_number": 3,
+      "misleading_value": null
+    },
+    {
+      "slot": 9,
+      "family": "S5_CONFIRMATION_NO_CHANGE",
+      "subject_template": "L'étage de la balise {namespace}-Iota",
+      "values": [
+        "trois",
+        "trois",
+        "trois",
+        "trois"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CONFIRMATION",
+        "CONFIRMATION",
+        "CONFIRMATION"
+      ],
+      "historical_event_number": 2,
+      "misleading_value": null
+    },
+    {
+      "slot": 10,
+      "family": "S5_CONFIRMATION_NO_CHANGE",
+      "subject_template": "Le canal de secours {namespace}-Kappa",
+      "values": [
+        "secondaire",
+        "secondaire",
+        "secondaire",
+        "secondaire"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CONFIRMATION",
+        "CONFIRMATION",
+        "CONFIRMATION"
+      ],
+      "historical_event_number": 3,
+      "misleading_value": null
+    },
+    {
+      "slot": 11,
+      "family": "S6_MISLEADING_REWRITE",
+      "subject_template": "Le profil du test {namespace}-Lambda",
+      "values": [
+        "profil-A",
+        "profil-B",
+        "profil-B",
+        "profil-C"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CORRECTION",
+        "CONFIRMATION",
+        "CORRECTION"
+      ],
+      "historical_event_number": 2,
+      "misleading_value": "profil-Z"
+    },
+    {
+      "slot": 12,
+      "family": "S6_MISLEADING_REWRITE",
+      "subject_template": "La version du scénario {namespace}-Mu",
+      "values": [
+        "v1",
+        "v2",
+        "v2",
+        "v3"
+      ],
+      "event_kinds": [
+        "INITIAL",
+        "CORRECTION",
+        "CONFIRMATION",
+        "CORRECTION"
+      ],
+      "historical_event_number": 1,
+      "misleading_value": "v9"
+    }
+  ],
+  "event_stream": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    1,
+    2,
+    3,
+    4,
+    5,
+    1,
+    3,
+    5,
+    7,
+    9,
+    11,
+    2,
+    4,
+    6,
+    8,
+    10,
+    12,
+    6,
+    12,
+    5,
+    11,
+    4,
+    10,
+    3,
+    9,
+    2,
+    8,
+    1,
+    7
+  ]
+}
