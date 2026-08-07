@@ -52,7 +52,7 @@ class P2Prediction(FrozenModel):
     condition: ExperimentCondition
     current_value: str | None
     contested_values: tuple[str, ...] = ()
-    unresolved_contradiction: bool
+    unresolved_contradiction: bool | None
     historical_value: str | None
     historical_contested_values: tuple[str, ...] = ()
     ordered_values: tuple[str, ...] = ()
@@ -60,7 +60,16 @@ class P2Prediction(FrozenModel):
     transition_source: SourceType | None
     transition_cycle_id: str | None
     retrieved_memory_ids: tuple[str, ...] = ()
+    repository_access_count: int = Field(default=0, ge=0)
+    ablation_enabled: bool = False
     reason: str = Field(min_length=1)
+
+
+class RawObservation(FrozenModel):
+    cycle_id: str = Field(min_length=1)
+    content: str = Field(min_length=1)
+    source_type: SourceType
+    value: str = Field(min_length=1)
 
 
 class EvidenceEvent(FrozenModel):
@@ -114,7 +123,7 @@ class NoHistoryCondition:
         return P2Prediction(
             condition=ExperimentCondition.A,
             current_value=None,
-            unresolved_contradiction=False,
+            unresolved_contradiction=None,
             historical_value=None,
             transition_reason=None,
             transition_source=None,
@@ -173,12 +182,18 @@ class StructuredHistoryCondition:
             identifiers=P2ExperimentIdentifiers(),
         )
         self._dataset_id = dataset.id
+        self._revision_metadata_access_count = 0
         self._ingest(dataset)
+
+    @property
+    def revision_metadata_access_count(self) -> int:
+        return self._revision_metadata_access_count
 
     def inspect(self, query: P2Query) -> P2Prediction:
         if query.dataset_id != self._dataset_id:
             raise ValueError("La requête ne correspond pas au jeu structuré chargé.")
 
+        access_count_before = self._revision_metadata_access_count
         memories = self._structured_memories(query.belief_key)
         evidence = self._raw_evidence(query.subject)
         reduced = _reduce_history(evidence, query.historical_cycle_id)
@@ -210,9 +225,50 @@ class StructuredHistoryCondition:
             transition_source=None if trace is None else trace.source_type,
             transition_cycle_id=None if trace is None else trace.cycle_id,
             retrieved_memory_ids=tuple(memory.id for memory in memories),
+            repository_access_count=(
+                self._revision_metadata_access_count - access_count_before
+            ),
             reason=(
                 "État courant et transition lus depuis la mémoire structurée C ; "
                 "continuité historique reconstruite depuis les événements bruts persistés."
+            ),
+        )
+
+    def inspect_ablated(self, query: P2Query) -> P2Prediction:
+        """Lit uniquement les observations brutes autorisées par l'ablation T9."""
+
+        if query.dataset_id != self._dataset_id:
+            raise ValueError("La requête ne correspond pas au jeu structuré chargé.")
+
+        access_count_before = self._revision_metadata_access_count
+        observations = self._raw_observations(query.subject)
+        trace = next(
+            (
+                observation
+                for observation in observations
+                if observation.cycle_id == query.trace_cycle_id
+            ),
+            None,
+        )
+        access_count = self._revision_metadata_access_count - access_count_before
+        if access_count != 0:
+            raise RuntimeError("L'ablation P2 a consulté des métadonnées de révision interdites.")
+
+        return P2Prediction(
+            condition=ExperimentCondition.C,
+            current_value=None,
+            unresolved_contradiction=None,
+            historical_value=None,
+            ordered_values=tuple(observation.value for observation in observations),
+            transition_reason=None,
+            transition_source=None if trace is None else trace.source_type,
+            transition_cycle_id=None if trace is None else trace.cycle_id,
+            repository_access_count=access_count,
+            ablation_enabled=True,
+            reason=(
+                "Ablation T9 active : seules les observations brutes, leur provenance et "
+                "leur ordre sont accessibles ; aucun statut, lien, raison structurée ou "
+                "journal de transition n'est consulté ni reconstruit."
             ),
         )
 
@@ -327,6 +383,7 @@ class StructuredHistoryCondition:
         return matching[0]
 
     def _structured_memories(self, belief_key: str) -> tuple[AutobiographicalMemory, ...]:
+        self._revision_metadata_access_count += 1
         with self._factory() as unit_of_work:
             return tuple(
                 unit_of_work.memories.list_for_belief(
@@ -335,7 +392,7 @@ class StructuredHistoryCondition:
                 )
             )
 
-    def _raw_evidence(self, subject: str) -> tuple[EvidenceEvent, ...]:
+    def _raw_observations(self, subject: str) -> tuple[RawObservation, ...]:
         with self._database.connect() as connection:
             rows = connection.execute(
                 """
@@ -346,23 +403,33 @@ class StructuredHistoryCondition:
                 """,
                 (AGENT_ID,),
             ).fetchall()
-        evidence: list[EvidenceEvent] = []
+        observations: list[RawObservation] = []
         for row in rows:
             content = str(row["raw_content"])
             if subject not in content:
                 continue
-            cycle_id = str(row["cycle_id"])
-            evidence.append(
-                EvidenceEvent(
-                    position=_cycle_position(cycle_id),
-                    cycle_id=cycle_id,
+            observations.append(
+                RawObservation(
+                    cycle_id=str(row["cycle_id"]),
                     content=content,
                     source_type=SourceType(str(row["source_type"])),
-                    kind=_kind_from_content(content),
                     value=_value_from_content(content),
                 )
             )
-        return tuple(evidence)
+        return tuple(observations)
+
+    def _raw_evidence(self, subject: str) -> tuple[EvidenceEvent, ...]:
+        return tuple(
+            EvidenceEvent(
+                position=_cycle_position(observation.cycle_id),
+                cycle_id=observation.cycle_id,
+                content=observation.content,
+                source_type=observation.source_type,
+                kind=_kind_from_content(observation.content),
+                value=observation.value,
+            )
+            for observation in self._raw_observations(subject)
+        )
 
 
 def build_query(chain: ExperimentChain) -> P2Query:
