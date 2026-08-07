@@ -9,6 +9,7 @@ from soinesis.experiments.exp_001_p2 import ExperimentDataset
 from soinesis.experiments.exp_001_p2_export import FROZEN_DATASET_SHA256
 from soinesis.experiments.exp_001_p2_official import (
     OFFICIAL_CONFIRMATION,
+    OFFICIAL_DATASET_PATH,
     GitRepositoryState,
     P2OfficialRunError,
     validate_official_preconditions,
@@ -123,6 +124,57 @@ def test_official_preconditions_reject_dirty_or_unpublished_state(
             output_directory=tmp_path / "unpublished",
             confirmation=OFFICIAL_CONFIRMATION,
         )
+
+
+def test_git_inspection_rejects_stale_origin_main(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    local_sha = "1" * 40
+    remote_sha = "2" * 40
+    responses: dict[tuple[str, ...], str] = {
+        ("rev-parse", "HEAD"): local_sha,
+        ("rev-parse", "origin/main"): local_sha,
+        ("ls-remote", "origin", "refs/heads/main"): f"{remote_sha}\trefs/heads/main",
+        ("branch", "--show-current"): "main",
+        ("status", "--porcelain=v1", "--untracked-files=all"): "",
+    }
+
+    def fake_git(_: Path, *arguments: str) -> str:
+        return responses[arguments]
+
+    monkeypatch.setattr(official_module, "_git", fake_git)
+
+    with pytest.raises(P2OfficialRunError, match="périmée"):
+        official_module.inspect_git_repository(tmp_path)
+
+
+def test_official_preconditions_anchor_dataset_to_repository_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed_paths: list[Path] = []
+
+    def record_dataset_hash(path: Path) -> str:
+        observed_paths.append(path)
+        return FROZEN_DATASET_SHA256
+
+    def record_dataset_load(path: Path) -> tuple[ExperimentDataset, ...]:
+        observed_paths.append(path)
+        return _development_datasets()
+
+    monkeypatch.setattr(official_module, "inspect_git_repository", _valid_git_state)
+    monkeypatch.setattr(official_module, "verify_frozen_dataset", record_dataset_hash)
+    monkeypatch.setattr(official_module, "load_datasets", record_dataset_load)
+
+    validate_official_preconditions(
+        repo_root=tmp_path,
+        output_directory=tmp_path / "bundle",
+        confirmation=OFFICIAL_CONFIRMATION,
+    )
+
+    expected = tmp_path / OFFICIAL_DATASET_PATH
+    assert observed_paths == [expected, expected]
 
 
 def test_official_preconditions_accept_only_frozen_complete_suite(
