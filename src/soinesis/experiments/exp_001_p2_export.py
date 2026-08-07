@@ -87,9 +87,7 @@ def verify_frozen_dataset(path: Path) -> str:
 
     digest = sha256_file(path)
     if digest != FROZEN_DATASET_SHA256:
-        raise ValueError(
-            "Le fichier de données P2 ne correspond pas au SHA-256 préenregistré."
-        )
+        raise ValueError("Le fichier de données P2 ne correspond pas au SHA-256 préenregistré.")
     return digest
 
 
