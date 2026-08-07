@@ -437,7 +437,8 @@ def _reduce_history(
     ordered_values: list[str] = []
 
     for event in events:
-        ordered_values.append(event.value)
+        if event.kind is not EventKind.CONFIRMATION:
+            ordered_values.append(event.value)
         if event.kind is EventKind.INITIAL or event.kind is EventKind.CORRECTION:
             active = (event.value,)
             contested = ()

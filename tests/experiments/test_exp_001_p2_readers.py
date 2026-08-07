@@ -150,7 +150,7 @@ def test_b_and_c_reconstruct_a_resolved_contradiction_without_ground_truth(
         assert prediction.unresolved_contradiction is False
         assert prediction.historical_value is None
         assert prediction.historical_contested_values == ("rouge", "bleu")
-        assert prediction.ordered_values == ("rouge", "bleu", "bleu", "vert")
+        assert prediction.ordered_values == ("rouge", "bleu", "vert")
         assert prediction.transition_reason == "Résolution explicite de la contradiction."
         assert prediction.transition_source is SourceType.JORDAN_INPUT
         assert prediction.transition_cycle_id == "fixture-resolved-cycle-004"
