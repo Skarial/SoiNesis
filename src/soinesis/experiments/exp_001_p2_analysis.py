@@ -11,6 +11,7 @@ import json
 from collections import defaultdict
 from enum import StrEnum
 from pathlib import Path
+from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -232,17 +233,23 @@ def _selected_datasets(
 
 
 def _preevaluation_all_valid(payload: object, dataset_ids: tuple[str, ...]) -> bool:
-    if not isinstance(payload, list) or len(payload) != len(dataset_ids):
+    if not isinstance(payload, list):
         return False
+    items = cast(list[object], payload)
+    if len(items) != len(dataset_ids):
+        return False
+
     observed_ids: list[str] = []
-    for item in payload:
+    for item in items:
         if not isinstance(item, dict):
             return False
-        dataset_id = item.get("dataset_id")
-        preevaluation = item.get("preevaluation")
+        typed_item = cast(dict[str, object], item)
+        dataset_id = typed_item.get("dataset_id")
+        preevaluation = typed_item.get("preevaluation")
         if not isinstance(dataset_id, str) or not isinstance(preevaluation, dict):
             return False
-        if preevaluation.get("all_valid") is not True:
+        typed_preevaluation = cast(dict[str, object], preevaluation)
+        if typed_preevaluation.get("all_valid") is not True:
             return False
         observed_ids.append(dataset_id)
     return tuple(observed_ids) == dataset_ids
