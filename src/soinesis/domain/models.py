@@ -1,4 +1,4 @@
-"""Modèles du domaine utilisés par la première tranche verticale."""
+"""Modèles du domaine utilisés par le socle expérimental de SoiNesis."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class SourceType(StrEnum):
 
 
 class MemoryType(StrEnum):
-    """Catégories minimales de souvenirs pour la première tranche."""
+    """Catégories minimales de souvenirs."""
 
     RECEIVED_INFORMATION = "RECEIVED_INFORMATION"
     DIRECT_EXPERIENCE = "DIRECT_EXPERIENCE"
@@ -57,7 +57,7 @@ class DomainModel(BaseModel):
 
 
 class Observation(DomainModel):
-    """Entrée structurée reçue pendant un cycle cognitif."""
+    """Entrée structurée reçue ou produite pendant un cycle cognitif."""
 
     id: str = Field(min_length=1)
     agent_id: str = Field(min_length=1)
@@ -100,11 +100,27 @@ class AutobiographicalMemory(DomainModel):
         """Conserver une séparation cohérente entre type et provenance."""
         if self.is_direct_experience and self.source_type is not SourceType.DIRECT_ENVIRONMENT:
             raise ValueError("Un souvenir direct doit provenir de DIRECT_ENVIRONMENT.")
+        if self.memory_type is MemoryType.DIRECT_EXPERIENCE and not self.is_direct_experience:
+            raise ValueError(
+                "Un souvenir DIRECT_EXPERIENCE doit être marqué comme expérience directe."
+            )
+        if (
+            self.memory_type is MemoryType.DEDUCTION
+            and self.source_type is not SourceType.DEDUCTION
+        ):
+            raise ValueError("Une déduction doit utiliser la source DEDUCTION.")
         if (
             self.memory_type is MemoryType.IMAGINED_SCENARIO
             and self.source_type is not SourceType.IMAGINATION
         ):
             raise ValueError("Un scénario imaginé doit utiliser la source IMAGINATION.")
+        if self.memory_type is MemoryType.RECEIVED_INFORMATION and self.source_type in {
+            SourceType.DEDUCTION,
+            SourceType.IMAGINATION,
+        }:
+            raise ValueError(
+                "Une déduction ou une imagination ne peut pas être classée comme information reçue."
+            )
         return self
 
 
