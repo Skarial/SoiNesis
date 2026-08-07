@@ -40,9 +40,7 @@ class HypothesisAssessment(StrEnum):
     SUPPORTED = "SUPPORTED"
     NOT_SUPPORTED = "NOT_SUPPORTED"
     ABSOLUTE_INTEGRITY_ONLY = "ABSOLUTE_INTEGRITY_ONLY"
-    AUTOMATED_CRITERIA_MET_MANUAL_AUDIT_REQUIRED = (
-        "AUTOMATED_CRITERIA_MET_MANUAL_AUDIT_REQUIRED"
-    )
+    AUTOMATED_CRITERIA_MET_MANUAL_AUDIT_REQUIRED = "AUTOMATED_CRITERIA_MET_MANUAL_AUDIT_REQUIRED"
 
 
 class DatasetConditionScore(FrozenModel):
@@ -418,7 +416,9 @@ def _rewrite_analysis(results: tuple[TrialResult, ...]) -> RewriteAnalysis:
 
 
 def _ablation_analysis(results: tuple[TrialResult, ...]) -> AblationAnalysis:
-    trials = tuple(result for result in results if result.trial_type is TrialType.T9_TARGETED_ABLATION)
+    trials = tuple(
+        result for result in results if result.trial_type is TrialType.T9_TARGETED_ABLATION
+    )
     if not trials:
         raise P2AnalysisError("Aucun essai T9 disponible.")
     forbidden_access_total = sum(result.repository_access_count for result in trials)

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 import soinesis.experiments.exp_001_p2_export as export_module
-from soinesis.experiments.exp_001_p2 import ExperimentDataset, load_datasets
+from soinesis.experiments.exp_001_p2 import load_datasets
 from soinesis.experiments.exp_001_p2_analysis import (
     HypothesisAssessment,
     P2Analysis,
@@ -92,10 +92,7 @@ def test_analysis_applies_only_preregistered_thresholds_to_verified_bundle(
     assert analysis.integrity.complete_dataset_suite is True
     assert analysis.primary_continuity_h01_h02_h03.c_overall_rate == 1.0
     assert analysis.primary_continuity_h01_h02_h03.b_overall_rate == 1.0
-    assert (
-        analysis.primary_continuity_h01_h02_h03.assessment
-        is HypothesisAssessment.NOT_SUPPORTED
-    )
+    assert analysis.primary_continuity_h01_h02_h03.assessment is HypothesisAssessment.NOT_SUPPORTED
     assert analysis.traceability_h04.assessment is HypothesisAssessment.NOT_SUPPORTED
     assert analysis.rewrite_h05.assessment is HypothesisAssessment.ABSOLUTE_INTEGRITY_ONLY
     assert (
@@ -111,7 +108,12 @@ def test_analysis_rejects_tampered_raw_results(
     dataset_path, source_bundle = development_bundle
     tampered_bundle = tmp_path / "tampered-bundle"
     tampered_bundle.mkdir()
-    for name in ("freeze-manifest.json", "preevaluation.json", "raw-trials.jsonl", "checksums.json"):
+    for name in (
+        "freeze-manifest.json",
+        "preevaluation.json",
+        "raw-trials.jsonl",
+        "checksums.json",
+    ):
         (tampered_bundle / name).write_bytes((source_bundle / name).read_bytes())
     with (tampered_bundle / "raw-trials.jsonl").open("a", encoding="utf-8") as handle:
         handle.write("{}\n")
