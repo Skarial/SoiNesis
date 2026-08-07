@@ -78,6 +78,9 @@ class SQLiteDatabase:
                     is_direct_experience INTEGER NOT NULL CHECK (
                         is_direct_experience IN (0, 1)
                     ),
+                    belief_key TEXT,
+                    parent_memory_ids_json TEXT NOT NULL DEFAULT '[]',
+                    transition_reason TEXT,
                     FOREIGN KEY (source_observation_id) REFERENCES observations(id)
                 );
 
@@ -100,6 +103,28 @@ class SQLiteDatabase:
                     ON journal_events(target_entity_type, target_entity_id);
                 """
             )
+            self._migrate_memories_for_p2(connection)
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS memories_agent_belief_idx
+                ON memories(agent_id, belief_key, created_at)
+                """
+            )
+
+    @staticmethod
+    def _migrate_memories_for_p2(connection: sqlite3.Connection) -> None:
+        """Ajouter sans perte les colonnes P2 aux bases créées par P0/P1."""
+        columns = {
+            str(row["name"]) for row in connection.execute("PRAGMA table_info(memories)").fetchall()
+        }
+        if "belief_key" not in columns:
+            connection.execute("ALTER TABLE memories ADD COLUMN belief_key TEXT")
+        if "parent_memory_ids_json" not in columns:
+            connection.execute(
+                "ALTER TABLE memories ADD COLUMN parent_memory_ids_json TEXT NOT NULL DEFAULT '[]'"
+            )
+        if "transition_reason" not in columns:
+            connection.execute("ALTER TABLE memories ADD COLUMN transition_reason TEXT")
 
 
 class SQLiteObservationRepository:
@@ -137,8 +162,9 @@ class SQLiteMemoryRepository:
             INSERT INTO memories (
                 id, agent_id, cycle_id, source_observation_id, memory_type,
                 title, content, source_type, confidence, importance, status,
-                created_at, is_direct_experience
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, is_direct_experience, belief_key,
+                parent_memory_ids_json, transition_reason
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 memory.id,
@@ -154,8 +180,42 @@ class SQLiteMemoryRepository:
                 memory.status.value,
                 memory.created_at.isoformat(),
                 int(memory.is_direct_experience),
+                memory.belief_key,
+                json.dumps(memory.parent_memory_ids, ensure_ascii=False),
+                memory.transition_reason,
             ),
         )
+
+    def get(self, memory_id: str) -> AutobiographicalMemory | None:
+        row = self._connection.execute(
+            "SELECT * FROM memories WHERE id = ?",
+            (memory_id,),
+        ).fetchone()
+        return None if row is None else _memory_from_row(row)
+
+    def update_status(self, *, memory_id: str, status: RecordStatus) -> None:
+        cursor = self._connection.execute(
+            "UPDATE memories SET status = ? WHERE id = ?",
+            (status.value, memory_id),
+        )
+        if cursor.rowcount != 1:
+            raise KeyError(f"Souvenir introuvable : {memory_id}")
+
+    def list_for_belief(
+        self,
+        *,
+        agent_id: str,
+        belief_key: str,
+    ) -> list[AutobiographicalMemory]:
+        rows = self._connection.execute(
+            """
+            SELECT * FROM memories
+            WHERE agent_id = ? AND belief_key = ?
+            ORDER BY created_at ASC, id ASC
+            """,
+            (agent_id, belief_key),
+        ).fetchall()
+        return [_memory_from_row(row) for row in rows]
 
     def search(
         self,
@@ -280,6 +340,14 @@ class SQLiteUnitOfWorkFactory:
 
 
 def _memory_from_row(row: sqlite3.Row) -> AutobiographicalMemory:
+    raw_parent_ids = cast(object, json.loads(row["parent_memory_ids_json"]))
+    if not isinstance(raw_parent_ids, list):
+        raise ValueError("Les parents d'un souvenir doivent être une liste JSON de chaînes.")
+    parent_ids = cast(list[object], raw_parent_ids)
+    if not all(isinstance(parent_id, str) for parent_id in parent_ids):
+        raise ValueError("Les parents d'un souvenir doivent être une liste JSON de chaînes.")
+    validated_parent_ids = cast(list[str], parent_ids)
+
     return AutobiographicalMemory(
         id=row["id"],
         agent_id=row["agent_id"],
@@ -294,6 +362,9 @@ def _memory_from_row(row: sqlite3.Row) -> AutobiographicalMemory:
         status=RecordStatus(row["status"]),
         created_at=datetime.fromisoformat(row["created_at"]),
         is_direct_experience=bool(row["is_direct_experience"]),
+        belief_key=row["belief_key"],
+        parent_memory_ids=tuple(validated_parent_ids),
+        transition_reason=row["transition_reason"],
     )
 
 

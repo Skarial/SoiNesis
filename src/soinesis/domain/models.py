@@ -45,9 +45,12 @@ class RecordStatus(StrEnum):
 
 
 class EventType(StrEnum):
-    """Événements du journal produits par la première tranche."""
+    """Événements immuables du journal d'évolution."""
 
     MEMORY_CREATED = "MEMORY_CREATED"
+    MEMORY_STATUS_CHANGED = "MEMORY_STATUS_CHANGED"
+    MEMORY_REVISION_CREATED = "MEMORY_REVISION_CREATED"
+    MEMORY_CONFIRMED = "MEMORY_CONFIRMED"
 
 
 class DomainModel(BaseModel):
@@ -79,7 +82,7 @@ class Observation(DomainModel):
 
 
 class AutobiographicalMemory(DomainModel):
-    """Souvenir autobiographique persistant et sourcé."""
+    """Souvenir autobiographique persistant, sourcé et éventuellement révisable."""
 
     id: str = Field(min_length=1)
     agent_id: str = Field(min_length=1)
@@ -94,10 +97,13 @@ class AutobiographicalMemory(DomainModel):
     status: RecordStatus = RecordStatus.ACTIVE
     created_at: datetime
     is_direct_experience: bool = False
+    belief_key: str | None = Field(default=None, min_length=1)
+    parent_memory_ids: tuple[str, ...] = ()
+    transition_reason: str | None = Field(default=None, min_length=1)
 
     @model_validator(mode="after")
     def validate_memory_source(self) -> AutobiographicalMemory:
-        """Conserver une séparation cohérente entre type et provenance."""
+        """Conserver une séparation cohérente entre type, provenance et révision."""
         if self.is_direct_experience and self.source_type is not SourceType.DIRECT_ENVIRONMENT:
             raise ValueError("Un souvenir direct doit provenir de DIRECT_ENVIRONMENT.")
         if self.memory_type is MemoryType.DIRECT_EXPERIENCE and not self.is_direct_experience:
@@ -121,6 +127,14 @@ class AutobiographicalMemory(DomainModel):
             raise ValueError(
                 "Une déduction ou une imagination ne peut pas être classée comme information reçue."
             )
+        if self.parent_memory_ids and self.belief_key is None:
+            raise ValueError("Une relation de révision doit appartenir à une clé de croyance.")
+        if self.transition_reason is not None and self.belief_key is None:
+            raise ValueError("Une raison de transition doit appartenir à une clé de croyance.")
+        if self.id in self.parent_memory_ids:
+            raise ValueError("Un souvenir ne peut pas être son propre parent.")
+        if len(set(self.parent_memory_ids)) != len(self.parent_memory_ids):
+            raise ValueError("Les parents d'un souvenir doivent être uniques.")
         return self
 
 
