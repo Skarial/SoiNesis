@@ -124,7 +124,12 @@ def test_b_and_c_capture_one_parity_snapshot_after_each_event(tmp_path: Path) ->
     assert len(text.ingestion_snapshots) == 4
     assert len(structured.ingestion_snapshots) == 4
     assert tuple(snapshot.event_count for snapshot in text.ingestion_snapshots) == (1, 2, 3, 4)
-    assert tuple(snapshot.event_count for snapshot in structured.ingestion_snapshots) == (1, 2, 3, 4)
+    assert tuple(snapshot.event_count for snapshot in structured.ingestion_snapshots) == (
+        1,
+        2,
+        3,
+        4,
+    )
     assert audit.metadata_matches_expected is True
     assert audit.evidence_parity_valid is True
     assert audit.bc_sequence_valid is True
@@ -137,7 +142,9 @@ def test_sequential_conditions_preserve_the_frozen_reader_behavior(tmp_path: Pat
     reference_text = TextHistoryCondition(dataset)
     sequential_text = SequentialTextHistoryCondition(dataset)
     reference_structured = StructuredHistoryCondition(dataset, tmp_path / "reference.db")
-    sequential_structured = SequentialStructuredHistoryCondition(dataset, tmp_path / "sequential.db")
+    sequential_structured = SequentialStructuredHistoryCondition(
+        dataset, tmp_path / "sequential.db"
+    )
 
     assert sequential_text.history == reference_text.history
     assert sequential_text.inspect(query) == reference_text.inspect(query)

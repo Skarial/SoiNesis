@@ -118,8 +118,7 @@ def audit_sequential_parity(
 ) -> SequentialParityAudit:
     expected_count = len(dataset.events)
     metadata_matches = (
-        len(text_snapshots) == expected_count
-        and len(structured_snapshots) == expected_count
+        len(text_snapshots) == expected_count and len(structured_snapshots) == expected_count
     )
     evidence_parity = metadata_matches
 
@@ -132,15 +131,11 @@ def audit_sequential_parity(
                 event.cycle_id,
                 index,
             )
-            if (
-                (text.stream_position, text.cycle_id, text.event_count) != expected_metadata
-                or (
-                    structured.stream_position,
-                    structured.cycle_id,
-                    structured.event_count,
-                )
-                != expected_metadata
-            ):
+            if (text.stream_position, text.cycle_id, text.event_count) != expected_metadata or (
+                structured.stream_position,
+                structured.cycle_id,
+                structured.event_count,
+            ) != expected_metadata:
                 metadata_matches = False
             if text.evidence_digest != structured.evidence_digest:
                 evidence_parity = False
