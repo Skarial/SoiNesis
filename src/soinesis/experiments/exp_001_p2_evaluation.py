@@ -111,13 +111,10 @@ def score_prediction(
     )
     historical_state_correct = _historical_state_matches(expected, prediction)
     order_correct = prediction.ordered_values == expected.ordered_values
-    contradiction_handled_correctly = (
-        not expected.unresolved_contradiction
-        or (
-            prediction.unresolved_contradiction is True
-            and prediction.current_value is None
-            and prediction.contested_values == expected.contested_values
-        )
+    contradiction_handled_correctly = not expected.unresolved_contradiction or (
+        prediction.unresolved_contradiction is True
+        and prediction.current_value is None
+        and prediction.contested_values == expected.contested_values
     )
     revision_trace_correct = (
         prediction.transition_reason == expected.transition_reason
@@ -131,9 +128,7 @@ def score_prediction(
         order_correct=order_correct,
         contradiction_handled_correctly=contradiction_handled_correctly,
         revision_trace_correct=revision_trace_correct,
-        continuity_correct=(
-            current_state_correct and historical_state_correct and order_correct
-        ),
+        continuity_correct=(current_state_correct and historical_state_correct and order_correct),
     )
 
 
@@ -166,8 +161,7 @@ def _historical_state_matches(
     if expected.historical_contested_values:
         return (
             prediction.historical_value is None
-            and prediction.historical_contested_values
-            == expected.historical_contested_values
+            and prediction.historical_contested_values == expected.historical_contested_values
         )
     return (
         prediction.historical_value == expected.historical_value
