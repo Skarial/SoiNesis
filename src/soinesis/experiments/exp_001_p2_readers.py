@@ -225,9 +225,7 @@ class StructuredHistoryCondition:
             transition_source=None if trace is None else trace.source_type,
             transition_cycle_id=None if trace is None else trace.cycle_id,
             retrieved_memory_ids=tuple(memory.id for memory in memories),
-            repository_access_count=(
-                self._revision_metadata_access_count - access_count_before
-            ),
+            repository_access_count=(self._revision_metadata_access_count - access_count_before),
             reason=(
                 "État courant et transition lus depuis la mémoire structurée C ; "
                 "continuité historique reconstruite depuis les événements bruts persistés."
