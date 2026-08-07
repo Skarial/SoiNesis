@@ -1,0 +1,42 @@
+{
+  "version": "1.0",
+  "source_order": ["JORDAN_INPUT", "EXTERNAL_TOOL", "DEDUCTION", "IMAGINATION"],
+  "datasets": [
+    {"id":"p1-dataset-01","namespace":"Aster","source_pattern":[0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3]},
+    {"id":"p1-dataset-02","namespace":"Boreal","source_pattern":[1,2,3,0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3,0]},
+    {"id":"p1-dataset-03","namespace":"Cygnus","source_pattern":[2,3,0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3,0,1]},
+    {"id":"p1-dataset-04","namespace":"Dorsal","source_pattern":[3,0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3,0,1,2]},
+    {"id":"p1-dataset-05","namespace":"Equinox","source_pattern":[0,2,1,3,2,0,3,1,1,3,0,2,3,1,2,0,2,0,3,1]}
+  ],
+  "items": [
+    {"slot":1,"title_template":"Balise {namespace}-01","content_template":"La balise {namespace}-01 porte le code Narvex."},
+    {"slot":2,"title_template":"Coffret {namespace}-02","content_template":"Le coffret {namespace}-02 contient trois plaques Lumen."},
+    {"slot":3,"title_template":"Module {namespace}-03","content_template":"Le module {namespace}-03 fonctionne avec une fréquence de 17 unités."},
+    {"slot":4,"title_template":"Repère {namespace}-04","content_template":"Le repère {namespace}-04 est associé au symbole Kestrel."},
+    {"slot":5,"title_template":"Capsule {namespace}-05","content_template":"La capsule {namespace}-05 possède une enveloppe hexagonale."},
+    {"slot":6,"title_template":"Archive {namespace}-06","content_template":"L’archive {namespace}-06 mentionne le terme Veloria."},
+    {"slot":7,"title_template":"Relais {namespace}-07","content_template":"Le relais {namespace}-07 utilise une séquence de quatre impulsions."},
+    {"slot":8,"title_template":"Station {namespace}-08","content_template":"La station {namespace}-08 est liée au marqueur Opaline."},
+    {"slot":9,"title_template":"Conteneur {namespace}-09","content_template":"Le conteneur {namespace}-09 présente une masse nominale de 23 unités."},
+    {"slot":10,"title_template":"Dossier {namespace}-10","content_template":"Le dossier {namespace}-10 référence le protocole Mistral."},
+    {"slot":11,"title_template":"Balancier {namespace}-11","content_template":"Le balancier {namespace}-11 effectue six cycles par période."},
+    {"slot":12,"title_template":"Terminal {namespace}-12","content_template":"Le terminal {namespace}-12 affiche l’identifiant Solstice."},
+    {"slot":13,"title_template":"Cellule {namespace}-13","content_template":"La cellule {namespace}-13 comporte deux compartiments internes."},
+    {"slot":14,"title_template":"Panneau {namespace}-14","content_template":"Le panneau {namespace}-14 est marqué par la lettre Q."},
+    {"slot":15,"title_template":"Nœud {namespace}-15","content_template":"Le nœud {namespace}-15 est relié à cinq connecteurs."},
+    {"slot":16,"title_template":"Sonde {namespace}-16","content_template":"La sonde {namespace}-16 indique une valeur de 41 unités."},
+    {"slot":17,"title_template":"Registre {namespace}-17","content_template":"Le registre {namespace}-17 contient l’entrée nommée Arpège."},
+    {"slot":18,"title_template":"Boîtier {namespace}-18","content_template":"Le boîtier {namespace}-18 utilise une fermeture triangulaire."},
+    {"slot":19,"title_template":"Vecteur {namespace}-19","content_template":"Le vecteur {namespace}-19 pointe vers le secteur Orion."},
+    {"slot":20,"title_template":"Porteur {namespace}-20","content_template":"Le porteur {namespace}-20 est associé à la valeur 68."}
+  ],
+  "false_source_slots": [1, 6, 11, 16, 18],
+  "false_content_templates": [
+    "Zyphor-{namespace}-A qelvax nimbrot.",
+    "Trevix-{namespace}-B ulmora kestyn.",
+    "Qarnel-{namespace}-C vespir dalnox.",
+    "Myrvox-{namespace}-D peltrin savora.",
+    "Jexal-{namespace}-E norvyn caldris."
+  ],
+  "ablation_slots": [2, 7, 12, 17, 20]
+}
