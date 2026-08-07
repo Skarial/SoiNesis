@@ -93,14 +93,18 @@ def validate_official_preconditions(
     if git.branch != OFFICIAL_BRANCH:
         raise P2OfficialRunError("L'exécution officielle initiale P2 exige la branche main.")
     if git.head_commit != git.origin_main_commit:
-        raise P2OfficialRunError("HEAD doit correspondre exactement à origin/main avant le run officiel.")
+        raise P2OfficialRunError(
+            "HEAD doit correspondre exactement à origin/main avant le run officiel."
+        )
     if not git.clean:
         raise P2OfficialRunError("Le dépôt Git doit être entièrement propre avant le run officiel.")
 
     try:
         dataset_sha256 = verify_frozen_dataset(dataset_path)
     except (OSError, ValueError) as error:
-        raise P2OfficialRunError("Le corpus officiel P2 ne passe pas le contrôle SHA-256.") from error
+        raise P2OfficialRunError(
+            "Le corpus officiel P2 ne passe pas le contrôle SHA-256."
+        ) from error
     if dataset_sha256 != FROZEN_DATASET_SHA256:
         raise P2OfficialRunError("Le corpus P2 chargé n'est pas le corpus officiel préenregistré.")
 
@@ -108,7 +112,9 @@ def validate_official_preconditions(
     if len(datasets) != 5:
         raise P2OfficialRunError("L'exécution officielle P2 exige exactement cinq jeux de données.")
     if len({dataset.id for dataset in datasets}) != 5:
-        raise P2OfficialRunError("Les cinq jeux officiels P2 doivent avoir des identifiants uniques.")
+        raise P2OfficialRunError(
+            "Les cinq jeux officiels P2 doivent avoir des identifiants uniques."
+        )
 
     return (
         OfficialPreconditions(
