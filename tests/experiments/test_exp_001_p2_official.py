@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+import soinesis.experiments.exp_001_p2_official as official_module
+from soinesis.experiments.exp_001_p2 import ExperimentDataset
+from soinesis.experiments.exp_001_p2_export import FROZEN_DATASET_SHA256
+from soinesis.experiments.exp_001_p2_official import (
+    OFFICIAL_CONFIRMATION,
+    GitRepositoryState,
+    P2OfficialRunError,
+    validate_official_preconditions,
+)
+
+
+def _git_state(
+    *,
+    branch: str = "main",
+    clean: bool = True,
+    head_commit: str = "1" * 40,
+    origin_main_commit: str = "1" * 40,
+) -> GitRepositoryState:
+    return GitRepositoryState(
+        head_commit=head_commit,
+        origin_main_commit=origin_main_commit,
+        branch=branch,
+        clean=clean,
+    )
+
+
+def _development_datasets() -> tuple[ExperimentDataset, ...]:
+    return tuple(
+        ExperimentDataset(
+            id=f"dev-dataset-{index}",
+            namespace=f"dev-namespace-{index}",
+            events=(),
+            chains=(),
+        )
+        for index in range(1, 6)
+    )
+
+
+def _patch_valid_external_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    datasets = _development_datasets()
+    monkeypatch.setattr(official_module, "inspect_git_repository", lambda _: _git_state())
+    monkeypatch.setattr(
+        official_module,
+        "verify_frozen_dataset",
+        lambda _: FROZEN_DATASET_SHA256,
+    )
+    monkeypatch.setattr(official_module, "load_datasets", lambda _: datasets)
+
+
+def test_official_preconditions_require_exact_explicit_confirmation(tmp_path: Path) -> None:
+    with pytest.raises(P2OfficialRunError, match="Confirmation officielle requise"):
+        validate_official_preconditions(
+            repo_root=tmp_path,
+            output_directory=tmp_path / "bundle",
+            confirmation="yes",
+        )
+
+
+def test_official_preconditions_reject_feature_branch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        official_module,
+        "inspect_git_repository",
+        lambda _: _git_state(branch="agent/implementer-exp-001-p2"),
+    )
+
+    with pytest.raises(P2OfficialRunError, match="branche main"):
+        validate_official_preconditions(
+            repo_root=tmp_path,
+            output_directory=tmp_path / "bundle",
+            confirmation=OFFICIAL_CONFIRMATION,
+        )
+
+
+def test_official_preconditions_reject_dirty_or_unpublished_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        official_module,
+        "inspect_git_repository",
+        lambda _: _git_state(clean=False),
+    )
+    with pytest.raises(P2OfficialRunError, match="entièrement propre"):
+        validate_official_preconditions(
+            repo_root=tmp_path,
+            output_directory=tmp_path / "dirty",
+            confirmation=OFFICIAL_CONFIRMATION,
+        )
+
+    monkeypatch.setattr(
+        official_module,
+        "inspect_git_repository",
+        lambda _: _git_state(origin_main_commit="2" * 40),
+    )
+    with pytest.raises(P2OfficialRunError, match="origin/main"):
+        validate_official_preconditions(
+            repo_root=tmp_path,
+            output_directory=tmp_path / "unpublished",
+            confirmation=OFFICIAL_CONFIRMATION,
+        )
+
+
+def test_official_preconditions_accept_only_frozen_complete_suite(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_valid_external_state(monkeypatch)
+
+    preconditions, datasets = validate_official_preconditions(
+        repo_root=tmp_path,
+        output_directory=tmp_path / "bundle",
+        confirmation=OFFICIAL_CONFIRMATION,
+    )
+
+    assert preconditions.git.branch == "main"
+    assert preconditions.git.clean is True
+    assert preconditions.git.head_commit == preconditions.git.origin_main_commit
+    assert preconditions.dataset_sha256 == FROZEN_DATASET_SHA256
+    assert preconditions.dataset_ids == tuple(dataset.id for dataset in datasets)
+    assert len(datasets) == 5
+
+
+def test_official_preconditions_refuse_existing_output_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_valid_external_state(monkeypatch)
+    output_directory = tmp_path / "bundle"
+    output_directory.mkdir()
+
+    with pytest.raises(P2OfficialRunError, match="existe déjà"):
+        validate_official_preconditions(
+            repo_root=tmp_path,
+            output_directory=output_directory,
+            confirmation=OFFICIAL_CONFIRMATION,
+        )
