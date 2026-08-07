@@ -99,18 +99,12 @@ def test_t9_uses_only_c_and_one_preselected_chain_per_dependent_family() -> None
 def test_normal_trial_scope_matches_protocol_families() -> None:
     plan = build_trial_plan((_dataset(),))
 
-    t1_families = {
-        entry.family for entry in plan if entry.trial_type is TrialType.T1_CURRENT_STATE
-    }
+    t1_families = {entry.family for entry in plan if entry.trial_type is TrialType.T1_CURRENT_STATE}
     t5_families = {
-        entry.family
-        for entry in plan
-        if entry.trial_type is TrialType.T5_UNRESOLVED_CONTRADICTION
+        entry.family for entry in plan if entry.trial_type is TrialType.T5_UNRESOLVED_CONTRADICTION
     }
     t6_families = {
-        entry.family
-        for entry in plan
-        if entry.trial_type is TrialType.T6_CONFIRMATION_NO_REVISION
+        entry.family for entry in plan if entry.trial_type is TrialType.T6_CONFIRMATION_NO_REVISION
     }
 
     assert ChainFamily.S3_UNRESOLVED_CONTRADICTION not in t1_families
