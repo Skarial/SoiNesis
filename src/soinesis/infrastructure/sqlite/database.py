@@ -115,8 +115,7 @@ class SQLiteDatabase:
     def _migrate_memories_for_p2(connection: sqlite3.Connection) -> None:
         """Ajouter sans perte les colonnes P2 aux bases créées par P0/P1."""
         columns = {
-            str(row["name"])
-            for row in connection.execute("PRAGMA table_info(memories)").fetchall()
+            str(row["name"]) for row in connection.execute("PRAGMA table_info(memories)").fetchall()
         }
         if "belief_key" not in columns:
             connection.execute("ALTER TABLE memories ADD COLUMN belief_key TEXT")
@@ -342,10 +341,12 @@ class SQLiteUnitOfWorkFactory:
 
 def _memory_from_row(row: sqlite3.Row) -> AutobiographicalMemory:
     raw_parent_ids = cast(object, json.loads(row["parent_memory_ids_json"]))
-    if not isinstance(raw_parent_ids, list) or not all(
-        isinstance(parent_id, str) for parent_id in raw_parent_ids
-    ):
+    if not isinstance(raw_parent_ids, list):
         raise ValueError("Les parents d'un souvenir doivent être une liste JSON de chaînes.")
+    parent_ids = cast(list[object], raw_parent_ids)
+    if not all(isinstance(parent_id, str) for parent_id in parent_ids):
+        raise ValueError("Les parents d'un souvenir doivent être une liste JSON de chaînes.")
+    validated_parent_ids = cast(list[str], parent_ids)
 
     return AutobiographicalMemory(
         id=row["id"],
@@ -362,7 +363,7 @@ def _memory_from_row(row: sqlite3.Row) -> AutobiographicalMemory:
         created_at=datetime.fromisoformat(row["created_at"]),
         is_direct_experience=bool(row["is_direct_experience"]),
         belief_key=row["belief_key"],
-        parent_memory_ids=tuple(cast(list[str], raw_parent_ids)),
+        parent_memory_ids=tuple(validated_parent_ids),
         transition_reason=row["transition_reason"],
     )
 

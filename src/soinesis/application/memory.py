@@ -204,7 +204,9 @@ class MemoryApplicationService:
                 if parent.belief_key != belief_key:
                     raise ValueError("Tous les parents doivent appartenir à la même croyance.")
                 if parent.status is parent_new_status:
-                    raise ValueError("Une transition doit modifier réellement le statut de son parent.")
+                    raise ValueError(
+                        "Une transition doit modifier réellement le statut de son parent."
+                    )
                 parents.append(parent)
 
             unit_of_work.observations.add(observation)

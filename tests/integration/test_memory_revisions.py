@@ -227,8 +227,7 @@ def test_schema_migrates_legacy_memories_table_for_p2(tmp_path: Path) -> None:
 
     with database.connect() as connection:
         columns = {
-            str(row["name"])
-            for row in connection.execute("PRAGMA table_info(memories)").fetchall()
+            str(row["name"]) for row in connection.execute("PRAGMA table_info(memories)").fetchall()
         }
 
     assert {"belief_key", "parent_memory_ids_json", "transition_reason"} <= columns
