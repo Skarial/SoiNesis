@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
+from itertools import pairwise
 from pathlib import Path
 
 from soinesis.domain.models import MemoryType, SourceType
@@ -40,10 +41,7 @@ def test_p2_events_are_globally_interleaved() -> None:
         for chain in dataset.chains:
             positions = [event.stream_position for event in chain.events]
             assert positions == sorted(positions)
-            assert all(
-                later - earlier >= 2
-                for earlier, later in zip(positions, positions[1:], strict=True)
-            )
+            assert all(later - earlier >= 2 for earlier, later in pairwise(positions))
 
 
 def test_p2_sources_are_balanced_and_memory_types_are_semantic() -> None:

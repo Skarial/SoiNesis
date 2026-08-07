@@ -105,9 +105,12 @@ class ChainTemplate(FrozenModel):
         elif self.misleading_value is not None:
             raise ValueError("Seules les chaînes S6 portent une réécriture trompeuse.")
         for index, kind in enumerate(self.event_kinds):
-            if kind is EventKind.CONFIRMATION and index > 0:
-                if self.values[index] != self.values[index - 1]:
-                    raise ValueError("Une confirmation ne doit pas changer la valeur.")
+            if (
+                kind is EventKind.CONFIRMATION
+                and index > 0
+                and self.values[index] != self.values[index - 1]
+            ):
+                raise ValueError("Une confirmation ne doit pas changer la valeur.")
         return self
 
 
