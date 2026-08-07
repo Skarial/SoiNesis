@@ -261,7 +261,7 @@ def _summary_line(item: DatasetItem) -> str:
     prefix = {
         SourceType.JORDAN_INPUT: "Jordan a indiqué au sujet de",
         SourceType.EXTERNAL_TOOL: "Un outil externe a indiqué au sujet de",
-        SourceType.DEDUCTION: "Une déduction produite pendant l’expérience au sujet de",
+        SourceType.DEDUCTION: "Une déduction produite pendant l'expérience au sujet de",
         SourceType.IMAGINATION: "Un scénario imaginé au sujet de",
     }[item.source_type]
     return f"{prefix} « {item.title} » : {item.content}"
@@ -271,7 +271,7 @@ def _source_from_summary_line(line: str) -> SourceType | None:
     prefixes = (
         ("Jordan a indiqué au sujet de", SourceType.JORDAN_INPUT),
         ("Un outil externe a indiqué au sujet de", SourceType.EXTERNAL_TOOL),
-        ("Une déduction produite pendant l’expérience au sujet de", SourceType.DEDUCTION),
+        ("Une déduction produite pendant l'expérience au sujet de", SourceType.DEDUCTION),
         ("Un scénario imaginé au sujet de", SourceType.IMAGINATION),
     )
     for prefix, source in prefixes:
@@ -700,8 +700,7 @@ def assess_protocol(
     ablation = tuple(
         result
         for result in results
-        if result.condition is ExperimentCondition.C
-        and result.trial_type is TrialType.ABLATION
+        if result.condition is ExperimentCondition.C and result.trial_type is TrialType.ABLATION
     )
     ablation_valid = bool(ablation) and all(
         result.memory_repository_access_count == 0
@@ -816,7 +815,7 @@ def _adversarial_source_trial_type(source: SourceType) -> TrialType:
 def _source_label(source: SourceType) -> str:
     return {
         SourceType.JORDAN_INPUT: "Jordan",
-        SourceType.EXTERNAL_TOOL: "L’outil externe",
+        SourceType.EXTERNAL_TOOL: "L'outil externe",
         SourceType.DEDUCTION: "Une déduction interne",
         SourceType.IMAGINATION: "Un scénario imaginé",
     }[source]
