@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from soinesis.domain.models import SourceType
+from soinesis.domain.models import MemoryType, SourceType
 from soinesis.experiments.exp_001_p2 import (
     ChainFamily,
     DatasetEvent,
@@ -44,9 +44,9 @@ def _event(
         }[kind],
         source_type=source,
         memory_type=(
-            __import__("soinesis.domain.models", fromlist=["MemoryType"]).MemoryType.DEDUCTION
+            MemoryType.DEDUCTION
             if source is SourceType.DEDUCTION
-            else __import__("soinesis.domain.models", fromlist=["MemoryType"]).MemoryType.RECEIVED_INFORMATION
+            else MemoryType.RECEIVED_INFORMATION
         ),
     )
 
