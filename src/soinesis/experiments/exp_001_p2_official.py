@@ -1,8 +1,8 @@
 """Orchestration strictement gardée de l'exécution officielle EXP-001-P2.
 
 Ce module ne doit être utilisé qu'après fusion de l'implémentation figée sur
-``main``. Il vérifie l'état Git local, l'identité du corpus officiel et
-l'absence d'état résiduel avant d'exécuter les cinq jeux puis d'exporter le
+``main``. Il vérifie l'état Git local et distant, l'identité du corpus officiel
+et l'absence d'état résiduel avant d'exécuter les cinq jeux puis d'exporter le
 bundle brut. Il ne calcule aucune interprétation scientifique.
 """
 
@@ -29,6 +29,7 @@ OFFICIAL_BRANCH = "main"
 OFFICIAL_CONFIRMATION = "RUN EXP-001-P2 OFFICIAL"
 OFFICIAL_DATASET_PATH = Path("data/exp-001-p2/datasets-v1.json")
 _COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+_REMOTE_MAIN_REF = "refs/heads/main"
 
 
 class FrozenModel(BaseModel):
@@ -53,14 +54,19 @@ class P2OfficialRunError(RuntimeError):
 
 
 def inspect_git_repository(repo_root: Path) -> GitRepositoryState:
-    """Lit uniquement l'état Git local nécessaire au gel officiel."""
+    """Vérifie l'état Git local et la fraîcheur de la référence distante main."""
 
     head = _git(repo_root, "rev-parse", "HEAD")
     origin_main = _git(repo_root, "rev-parse", "origin/main")
+    remote_main = _remote_main_commit(repo_root)
     branch = _git(repo_root, "branch", "--show-current")
     status = _git(repo_root, "status", "--porcelain=v1", "--untracked-files=all")
     if _COMMIT_PATTERN.fullmatch(head) is None or _COMMIT_PATTERN.fullmatch(origin_main) is None:
         raise P2OfficialRunError("Git n'a pas fourni des SHA complets valides sur 40 caractères.")
+    if origin_main != remote_main:
+        raise P2OfficialRunError(
+            "La référence locale origin/main est périmée par rapport au dépôt distant."
+        )
     if not branch:
         raise P2OfficialRunError("L'exécution officielle P2 refuse un HEAD détaché.")
     return GitRepositoryState(
@@ -99,8 +105,9 @@ def validate_official_preconditions(
     if not git.clean:
         raise P2OfficialRunError("Le dépôt Git doit être entièrement propre avant le run officiel.")
 
+    resolved_dataset_path = _resolve_dataset_path(repo_root, dataset_path)
     try:
-        dataset_sha256 = verify_frozen_dataset(dataset_path)
+        dataset_sha256 = verify_frozen_dataset(resolved_dataset_path)
     except (OSError, ValueError) as error:
         raise P2OfficialRunError(
             "Le corpus officiel P2 ne passe pas le contrôle SHA-256."
@@ -108,7 +115,7 @@ def validate_official_preconditions(
     if dataset_sha256 != FROZEN_DATASET_SHA256:
         raise P2OfficialRunError("Le corpus P2 chargé n'est pas le corpus officiel préenregistré.")
 
-    datasets = load_datasets(dataset_path)
+    datasets = load_datasets(resolved_dataset_path)
     if len(datasets) != 5:
         raise P2OfficialRunError("L'exécution officielle P2 exige exactement cinq jeux de données.")
     if len({dataset.id for dataset in datasets}) != 5:
@@ -135,11 +142,12 @@ def run_official_experiment(
 ) -> ExportedRunBundle:
     """Exécute les cinq jeux officiels puis exporte immédiatement le bundle brut."""
 
+    resolved_dataset_path = _resolve_dataset_path(repo_root, dataset_path)
     preconditions, datasets = validate_official_preconditions(
         repo_root=repo_root,
         output_directory=output_directory,
         confirmation=confirmation,
-        dataset_path=dataset_path,
+        dataset_path=resolved_dataset_path,
     )
     execution_timestamp = datetime.now(UTC)
 
@@ -158,7 +166,7 @@ def run_official_experiment(
 
         bundle = export_run_bundle(
             output_directory=output_directory,
-            dataset_path=dataset_path,
+            dataset_path=resolved_dataset_path,
             datasets=datasets,
             runs=tuple(runs),
             code_commit=preconditions.git.head_commit,
@@ -169,6 +177,21 @@ def run_official_experiment(
     if bundle.manifest.dataset_sha256 != FROZEN_DATASET_SHA256:
         raise P2OfficialRunError("Le bundle produit ne référence pas le corpus officiel P2.")
     return bundle
+
+
+def _resolve_dataset_path(repo_root: Path, dataset_path: Path) -> Path:
+    return dataset_path if dataset_path.is_absolute() else repo_root / dataset_path
+
+
+def _remote_main_commit(repo_root: Path) -> str:
+    output = _git(repo_root, "ls-remote", "origin", _REMOTE_MAIN_REF)
+    fields = output.split()
+    if len(fields) != 2 or fields[1] != _REMOTE_MAIN_REF:
+        raise P2OfficialRunError("Impossible d'identifier précisément la branche main distante.")
+    commit = fields[0]
+    if _COMMIT_PATTERN.fullmatch(commit) is None:
+        raise P2OfficialRunError("Le dépôt distant n'a pas fourni un SHA main valide.")
+    return commit
 
 
 def _git(repo_root: Path, *arguments: str) -> str:
