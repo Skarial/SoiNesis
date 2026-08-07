@@ -42,15 +42,22 @@ def _development_datasets() -> tuple[ExperimentDataset, ...]:
     )
 
 
+def _valid_git_state(_: Path) -> GitRepositoryState:
+    return _git_state()
+
+
+def _valid_dataset_hash(_: Path) -> str:
+    return FROZEN_DATASET_SHA256
+
+
+def _valid_development_datasets(_: Path) -> tuple[ExperimentDataset, ...]:
+    return _development_datasets()
+
+
 def _patch_valid_external_state(monkeypatch: pytest.MonkeyPatch) -> None:
-    datasets = _development_datasets()
-    monkeypatch.setattr(official_module, "inspect_git_repository", lambda _: _git_state())
-    monkeypatch.setattr(
-        official_module,
-        "verify_frozen_dataset",
-        lambda _: FROZEN_DATASET_SHA256,
-    )
-    monkeypatch.setattr(official_module, "load_datasets", lambda _: datasets)
+    monkeypatch.setattr(official_module, "inspect_git_repository", _valid_git_state)
+    monkeypatch.setattr(official_module, "verify_frozen_dataset", _valid_dataset_hash)
+    monkeypatch.setattr(official_module, "load_datasets", _valid_development_datasets)
 
 
 def test_official_preconditions_require_exact_explicit_confirmation(tmp_path: Path) -> None:
@@ -66,10 +73,13 @@ def test_official_preconditions_reject_feature_branch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    def feature_branch_state(_: Path) -> GitRepositoryState:
+        return _git_state(branch="agent/implementer-exp-001-p2")
+
     monkeypatch.setattr(
         official_module,
         "inspect_git_repository",
-        lambda _: _git_state(branch="agent/implementer-exp-001-p2"),
+        feature_branch_state,
     )
 
     with pytest.raises(P2OfficialRunError, match="branche main"):
@@ -84,10 +94,13 @@ def test_official_preconditions_reject_dirty_or_unpublished_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    def dirty_git_state(_: Path) -> GitRepositoryState:
+        return _git_state(clean=False)
+
     monkeypatch.setattr(
         official_module,
         "inspect_git_repository",
-        lambda _: _git_state(clean=False),
+        dirty_git_state,
     )
     with pytest.raises(P2OfficialRunError, match="entièrement propre"):
         validate_official_preconditions(
@@ -96,10 +109,13 @@ def test_official_preconditions_reject_dirty_or_unpublished_state(
             confirmation=OFFICIAL_CONFIRMATION,
         )
 
+    def unpublished_git_state(_: Path) -> GitRepositoryState:
+        return _git_state(origin_main_commit="2" * 40)
+
     monkeypatch.setattr(
         official_module,
         "inspect_git_repository",
-        lambda _: _git_state(origin_main_commit="2" * 40),
+        unpublished_git_state,
     )
     with pytest.raises(P2OfficialRunError, match="origin/main"):
         validate_official_preconditions(
