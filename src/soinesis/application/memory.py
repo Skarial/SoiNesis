@@ -1,4 +1,4 @@
-"""Cas d'usage de la première tranche autobiographique."""
+"""Cas d'usage de la mémoire autobiographique."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from soinesis.ports.system import Clock, IdentifierGenerator
 
 
 class RecordedMemory(BaseModel):
-    """Résultat immuable de la consolidation d'une information reçue."""
+    """Résultat immuable de la consolidation d'un souvenir."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -42,19 +42,21 @@ class MemoryApplicationService:
         self._clock = clock
         self._identifiers = identifiers
 
-    def record_received_information(
+    def record_memory(
         self,
         *,
         agent_id: str,
         cycle_id: str,
         title: str,
         content: str,
+        memory_type: MemoryType,
         source_type: SourceType,
         confidence: float = 1.0,
         importance: float = 0.5,
     ) -> RecordedMemory:
-        """Consolider atomiquement une information reçue et son journal."""
+        """Consolider atomiquement un souvenir explicitement typé et sourcé."""
         now = self._clock.now()
+        is_direct_experience = memory_type is MemoryType.DIRECT_EXPERIENCE
         observation = Observation(
             id=self._identifiers.new("observation"),
             agent_id=agent_id,
@@ -63,21 +65,21 @@ class MemoryApplicationService:
             raw_content=content,
             received_at=now,
             confidence=confidence,
-            is_direct_experience=False,
+            is_direct_experience=is_direct_experience,
         )
         memory = AutobiographicalMemory(
             id=self._identifiers.new("memory"),
             agent_id=agent_id,
             cycle_id=cycle_id,
             source_observation_id=observation.id,
-            memory_type=MemoryType.RECEIVED_INFORMATION,
+            memory_type=memory_type,
             title=title,
             content=content,
             source_type=source_type,
             confidence=confidence,
             importance=importance,
             created_at=now,
-            is_direct_experience=False,
+            is_direct_experience=is_direct_experience,
         )
         event = JournalEvent(
             id=self._identifiers.new("event"),
@@ -87,7 +89,7 @@ class MemoryApplicationService:
             target_entity_type="AutobiographicalMemory",
             target_entity_id=memory.id,
             occurred_at=now,
-            reason="Consolidation explicite d'une information reçue.",
+            reason=f"Consolidation explicite d'un souvenir de type {memory_type.value}.",
             new_value={
                 "memory_type": memory.memory_type.value,
                 "source_type": memory.source_type.value,
@@ -104,6 +106,73 @@ class MemoryApplicationService:
             unit_of_work.commit()
 
         return RecordedMemory(observation=observation, memory=memory, event=event)
+
+    def record_received_information(
+        self,
+        *,
+        agent_id: str,
+        cycle_id: str,
+        title: str,
+        content: str,
+        source_type: SourceType,
+        confidence: float = 1.0,
+        importance: float = 0.5,
+    ) -> RecordedMemory:
+        """Consolider une information reçue sans la confondre avec une production interne."""
+        return self.record_memory(
+            agent_id=agent_id,
+            cycle_id=cycle_id,
+            title=title,
+            content=content,
+            memory_type=MemoryType.RECEIVED_INFORMATION,
+            source_type=source_type,
+            confidence=confidence,
+            importance=importance,
+        )
+
+    def record_deduction(
+        self,
+        *,
+        agent_id: str,
+        cycle_id: str,
+        title: str,
+        content: str,
+        confidence: float = 1.0,
+        importance: float = 0.5,
+    ) -> RecordedMemory:
+        """Consolider une déduction en conservant explicitement son origine interne."""
+        return self.record_memory(
+            agent_id=agent_id,
+            cycle_id=cycle_id,
+            title=title,
+            content=content,
+            memory_type=MemoryType.DEDUCTION,
+            source_type=SourceType.DEDUCTION,
+            confidence=confidence,
+            importance=importance,
+        )
+
+    def record_imagination(
+        self,
+        *,
+        agent_id: str,
+        cycle_id: str,
+        title: str,
+        content: str,
+        confidence: float = 1.0,
+        importance: float = 0.5,
+    ) -> RecordedMemory:
+        """Consolider un scénario imaginé sans le transformer en fait reçu."""
+        return self.record_memory(
+            agent_id=agent_id,
+            cycle_id=cycle_id,
+            title=title,
+            content=content,
+            memory_type=MemoryType.IMAGINED_SCENARIO,
+            source_type=SourceType.IMAGINATION,
+            confidence=confidence,
+            importance=importance,
+        )
 
     def recall(
         self,
