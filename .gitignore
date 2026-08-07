@@ -23,6 +23,9 @@ dist/
 # Données locales
 data/*
 !data/.gitkeep
+!data/exp-001-p1/
+data/exp-001-p1/*
+!data/exp-001-p1/datasets-v1.json
 *.db
 *.db-shm
 *.db-wal
