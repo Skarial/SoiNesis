@@ -16,7 +16,6 @@ from soinesis.experiments.exp_001_p2_plan import TrialType, build_trial_plan
 from soinesis.experiments.exp_001_p2_readers import ExperimentCondition
 from soinesis.experiments.exp_001_p2_runner import DatasetRun, ResolutionStatus, run_dataset
 
-
 _CHAIN_SPECS = (
     (
         ChainFamily.S1_SIMPLE_CORRECTION,

@@ -160,9 +160,7 @@ def run_dataset(
     structured = SequentialStructuredHistoryCondition(dataset, database_path)
     no_history = NoHistoryCondition()
 
-    expected_by_chain = {
-        chain.id: expected_chain_state(chain) for chain in dataset.chains
-    }
+    expected_by_chain = {chain.id: expected_chain_state(chain) for chain in dataset.chains}
     preevaluation = _preevaluation_audit(
         dataset=dataset,
         text=text,
@@ -171,9 +169,7 @@ def run_dataset(
         truth_references_valid=(len(expected_by_chain) == len(dataset.chains)),
     )
     if not preevaluation.all_valid:
-        raise P2RunInvalidError(
-            f"Le jeu {dataset.id} échoue aux contrôles pré-évaluation P2."
-        )
+        raise P2RunInvalidError(f"Le jeu {dataset.id} échoue aux contrôles pré-évaluation P2.")
 
     chains = {chain.id: chain for chain in dataset.chains}
     plan = build_trial_plan((dataset,))
