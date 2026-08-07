@@ -18,9 +18,7 @@ from soinesis.domain.models import SourceType
 from soinesis.experiments.exp_001_p2 import ExperimentDataset
 from soinesis.experiments.exp_001_p2_readers import AGENT_ID
 
-_TEXT_LINE_PATTERN = re.compile(
-    r"^Moment (?P<position>\d{3})\. (?P<source>.+?)\. (?P<content>.+)$"
-)
+_TEXT_LINE_PATTERN = re.compile(r"^Moment (?P<position>\d{3})\. (?P<source>.+?)\. (?P<content>.+)$")
 _SOURCE_LABELS = {
     SourceType.JORDAN_INPUT: "Jordan indique",
     SourceType.EXTERNAL_TOOL: "Un outil externe indique",
