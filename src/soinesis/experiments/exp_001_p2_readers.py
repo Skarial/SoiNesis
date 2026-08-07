@@ -27,9 +27,7 @@ from soinesis.infrastructure.sqlite import SQLiteDatabase, SQLiteUnitOfWorkFacto
 
 AGENT_ID = "agent_soinesis_exp_001_p2"
 _VALUE_PATTERN = re.compile(r"«([^»]+)»")
-_TEXT_LINE_PATTERN = re.compile(
-    r"^Moment (?P<position>\d{3})\. (?P<source>.+?)\. (?P<content>.+)$"
-)
+_TEXT_LINE_PATTERN = re.compile(r"^Moment (?P<position>\d{3})\. (?P<source>.+?)\. (?P<content>.+)$")
 
 
 class ExperimentCondition(StrEnum):
@@ -103,9 +101,9 @@ class P2ExperimentIdentifiers:
 
 @dataclass
 class _BeliefIngestionState:
-    active_ids: list[str] = field(default_factory=list)
-    contested_ids: list[str] = field(default_factory=list)
-    values_by_memory_id: dict[str, str] = field(default_factory=dict)
+    active_ids: list[str] = field(default_factory=lambda: list[str]())
+    contested_ids: list[str] = field(default_factory=lambda: list[str]())
+    values_by_memory_id: dict[str, str] = field(default_factory=lambda: dict[str, str]())
 
 
 class NoHistoryCondition:
@@ -140,7 +138,9 @@ class TextHistoryCondition:
         if query.dataset_id != self._dataset_id:
             raise ValueError("La requête ne correspond pas au jeu textuel chargé.")
         evidence = tuple(
-            event for event in _parse_text_history(self._history, self._dataset_id) if query.subject in event.content
+            event
+            for event in _parse_text_history(self._history, self._dataset_id)
+            if query.subject in event.content
         )
         reduced = _reduce_history(evidence, query.historical_cycle_id)
         trace = next((event for event in evidence if event.cycle_id == query.trace_cycle_id), None)
@@ -186,13 +186,17 @@ class StructuredHistoryCondition:
         contested = tuple(memory for memory in memories if memory.status is RecordStatus.CONTESTED)
 
         if active and contested:
-            raise RuntimeError("Une croyance P2 ne peut pas être active et contestée simultanément.")
+            raise RuntimeError(
+                "Une croyance P2 ne peut pas être active et contestée simultanément."
+            )
         if len(active) > 1:
             raise RuntimeError("Une croyance P2 ne peut pas avoir plusieurs versions actives.")
 
         current_value = None if not active else _value_from_content(active[0].content)
         contested_values = tuple(_value_from_content(memory.content) for memory in contested)
-        trace = next((memory for memory in memories if memory.cycle_id == query.trace_cycle_id), None)
+        trace = next(
+            (memory for memory in memories if memory.cycle_id == query.trace_cycle_id), None
+        )
 
         return P2Prediction(
             condition=ExperimentCondition.C,
@@ -434,10 +438,7 @@ def _reduce_history(
 
     for event in events:
         ordered_values.append(event.value)
-        if event.kind is EventKind.INITIAL:
-            active = (event.value,)
-            contested = ()
-        elif event.kind is EventKind.CORRECTION:
+        if event.kind is EventKind.INITIAL or event.kind is EventKind.CORRECTION:
             active = (event.value,)
             contested = ()
         elif event.kind is EventKind.CONTRADICTION:
@@ -479,7 +480,7 @@ def _value_from_content(content: str) -> str:
     match = _VALUE_PATTERN.search(content)
     if match is None:
         raise ValueError("Aucune valeur entre guillemets français dans l'événement P2.")
-    return match.group(1)
+    return match.group(1).strip()
 
 
 def _reason_for_kind(kind: EventKind) -> str:

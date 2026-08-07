@@ -21,9 +21,7 @@ from soinesis.experiments.exp_001_p2_readers import (
 
 def _memory_type(source: SourceType) -> MemoryType:
     return (
-        MemoryType.DEDUCTION
-        if source is SourceType.DEDUCTION
-        else MemoryType.RECEIVED_INFORMATION
+        MemoryType.DEDUCTION if source is SourceType.DEDUCTION else MemoryType.RECEIVED_INFORMATION
     )
 
 
