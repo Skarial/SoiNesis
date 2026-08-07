@@ -12,7 +12,7 @@ from collections import defaultdict
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from soinesis.experiments.exp_001_p2 import (
     EXPERIMENT_ID,
@@ -158,17 +158,24 @@ def _load_verified_bundle(
             sha256_file(raw_trials_path) == checksums.raw_trials_sha256,
         )
     )
+    if not checksums_valid:
+        raise P2AnalysisError("Le bundle P2 échoue aux contrôles d'intégrité pré-analyse.")
 
     datasets = load_datasets(dataset_path)
     selected = _selected_datasets(datasets, manifest.dataset_ids)
     plan = build_trial_plan(selected)
     trial_plan_valid = trial_plan_sha256(plan) == manifest.trial_plan_sha256
 
-    results = tuple(
-        TrialResult.model_validate_json(line)
-        for line in raw_trials_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    )
+    try:
+        results = tuple(
+            TrialResult.model_validate_json(line)
+            for line in raw_trials_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    except ValidationError as error:
+        raise P2AnalysisError(
+            "Le bundle P2 échoue aux contrôles d'intégrité pré-analyse."
+        ) from error
     expected_trial_ids = tuple(entry.trial_id for entry in plan)
     actual_trial_ids = tuple(result.trial_id for result in results)
     result_count_valid = (
