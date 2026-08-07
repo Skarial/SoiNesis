@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from soinesis.experiments.exp_001_p2 import load_datasets
+from soinesis.experiments.exp_001_p2 import ExperimentDataset, load_datasets
 from soinesis.experiments.exp_001_p2_export import (
     FROZEN_DATASET_SHA256,
     ExportedRunBundle,
@@ -21,7 +21,9 @@ _CODE_COMMIT = "1" * 40
 
 
 @pytest.fixture(scope="module")
-def frozen_dataset_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[object, DatasetRun]:
+def frozen_dataset_run(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> tuple[ExperimentDataset, DatasetRun]:
     dataset = load_datasets(_DATASET_PATH)[0]
     run = run_dataset(
         dataset=dataset,
@@ -43,7 +45,7 @@ def test_frozen_dataset_matches_preregistered_byte_hash(tmp_path: Path) -> None:
 
 def test_export_writes_raw_trials_in_frozen_order_with_immediate_checksums(
     tmp_path: Path,
-    frozen_dataset_run: tuple[object, DatasetRun],
+    frozen_dataset_run: tuple[ExperimentDataset, DatasetRun],
 ) -> None:
     dataset, run = frozen_dataset_run
     bundle = export_run_bundle(
@@ -73,7 +75,7 @@ def test_export_writes_raw_trials_in_frozen_order_with_immediate_checksums(
 
 def test_export_refuses_to_overwrite_an_existing_bundle(
     tmp_path: Path,
-    frozen_dataset_run: tuple[object, DatasetRun],
+    frozen_dataset_run: tuple[ExperimentDataset, DatasetRun],
 ) -> None:
     dataset, run = frozen_dataset_run
     output_directory = tmp_path / "bundle-once"
@@ -96,7 +98,7 @@ def test_export_refuses_to_overwrite_an_existing_bundle(
 
 
 def test_manifest_rejects_a_commit_different_from_the_executed_run(
-    frozen_dataset_run: tuple[object, DatasetRun],
+    frozen_dataset_run: tuple[ExperimentDataset, DatasetRun],
 ) -> None:
     dataset, run = frozen_dataset_run
 
