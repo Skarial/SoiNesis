@@ -412,9 +412,22 @@ Chaque jeu doit comporter :
 2 chaînes utilisées pour suggestions trompeuses
 ```
 
-Chaque chaîne doit comporter entre 2 et 4 événements persistants selon sa famille.
+Les événements des 12 chaînes d’un même jeu ne doivent pas être présentés chaîne par chaîne. Ils doivent être entrelacés dans un flux chronologique global prédéfini.
 
-L’objectif est d’obtenir environ 150 à 200 événements persistants au total sans rendre le protocole inutilement volumineux.
+Ainsi, plusieurs événements appartenant à d’autres chaînes peuvent séparer une croyance initiale de sa correction, de sa contradiction ou de sa résolution. Cette contrainte vise à tester la continuité historique au milieu d’informations concurrentes plutôt qu’une simple lecture locale d’une séquence isolée.
+
+La longueur des chaînes doit varier :
+
+```text
+corrections simples et confirmations : 2 à 4 événements
+contradictions non résolues           : 3 à 5 événements
+révisions multiples                   : 4 à 6 événements
+contradictions puis résolution        : 4 à 6 événements
+```
+
+Au moins 6 chaînes sur 12 dans chaque jeu doivent comporter 4 à 6 événements persistants.
+
+L’objectif est d’obtenir environ 220 à 300 événements persistants au total. Cette augmentation vise à réduire l’effet de plafond observé dans P1 sans rendre B artificiellement défavorable.
 
 ## 12.3 Provenances
 
@@ -511,9 +524,31 @@ Demander quelle source ou quel événement a déclenché une correction, une con
 
 ## 14.9 T9 — Ablation ciblée
 
-Répéter un sous-ensemble prédéfini des essais après désactivation des métadonnées ou relations structurées de révision prévues par l’implémentation.
+Répéter un sous-ensemble prédéfini des essais avec une ablation réelle des mécanismes structurés de révision de C.
 
-L’ablation exacte devra être définie avant exécution et ne devra pas être simulée par un simple drapeau sans effet causal.
+L’ablation de P2 est préenregistrée comme suit.
+
+Restent accessibles :
+
+- le contenu brut des événements ;
+- leur provenance ;
+- leur cycle ou ordre temporel ;
+- les souvenirs de base qui ne dépendent pas des métadonnées de révision.
+
+Deviennent inaccessibles au mécanisme de décision :
+
+- le statut structuré d’une version (`ACTIVE`, `CONTESTED`, `SUPERSEDED`) ;
+- les liens structurés entre versions, notamment les relations de remplacement ou de révision ;
+- la raison structurée d’une transition ;
+- les événements de journal spécifiques permettant de reconstruire directement une transition.
+
+Pendant l’ablation, le système ne doit pas pouvoir récupérer ces informations par un cache, une copie secondaire, la vérité terrain expérimentale ou une autre représentation cachée.
+
+Le compteur d’accès au composant ablaté doit rester égal à zéro.
+
+Le système ne doit pas recalculer artificiellement les métadonnées interdites par une voie de secours ajoutée spécifiquement pour l’ablation.
+
+Si les tâches dépendantes restent inchangées malgré cette suppression réelle, ce résultat doit être conservé et affaiblira l’hypothèse selon laquelle les structures de révision sont causalement nécessaires.
 
 ---
 
@@ -568,6 +603,45 @@ Avant l’évaluation, un contrôle automatique doit vérifier que :
 3. C ne reçoit pas une information de vérité terrain absente de B, sauf métadonnée dérivée constituant précisément le mécanisme structuré testé ;
 4. aucune question future n’est encodée dans B ou C ;
 5. aucune condition n’accède aux données internes de l’autre.
+
+## 16.1 Gel des mécanismes de lecture
+
+Avant l’exécution officielle, les éléments suivants doivent être versionnés et figés :
+
+- règle de construction de l’historique textuel B ;
+- règle de construction de la représentation structurée C ;
+- mécanisme de récupération ou de sélection des informations dans B ;
+- mécanisme de récupération ou de sélection des informations dans C ;
+- normalisation lexicale éventuelle ;
+- budget maximal d’informations ou de candidats accessibles par essai lorsque cette comparaison est techniquement pertinente ;
+- règles déterministes produisant la réponse finale ;
+- règles de score ;
+- ordre des essais.
+
+Aucun de ces mécanismes ne doit être ajusté après observation des performances officielles de B ou C afin d’améliorer sélectivement une condition.
+
+Toute modification fonctionnelle effectuée après observation des résultats impose une nouvelle version expérimentale.
+
+Les essais techniques nécessaires au développement doivent utiliser des fixtures distinctes des résultats officiels et ne doivent pas servir à ajuster le protocole après coup.
+
+## 16.2 Distinction entre représentation et algorithme
+
+Les métadonnées structurées de C doivent être dérivées déterministement des mêmes événements externes que ceux disponibles dans B.
+
+La vérité terrain utilisée pour noter l’expérience doit rester inaccessible aux deux conditions pendant la production des réponses.
+
+Toute différence inévitable entre les mécanismes de lecture de B et C doit être documentée avant l’exécution officielle.
+
+Le rapport final devra distinguer autant que possible :
+
+```text
+effet de la quantité d’information
+effet de la représentation
+effet de la récupération
+effet de la règle de décision
+```
+
+Une supériorité de C ne pourra pas être attribuée à la structure seule si une autre différence non contrôlée suffit à l’expliquer.
 
 Le rapport final doit décrire toute asymétrie résiduelle.
 
