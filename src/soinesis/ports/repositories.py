@@ -5,7 +5,12 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Protocol, Self
 
-from soinesis.domain.models import AutobiographicalMemory, JournalEvent, Observation
+from soinesis.domain.models import (
+    AutobiographicalMemory,
+    JournalEvent,
+    Observation,
+    RecordStatus,
+)
 
 
 class ObservationRepository(Protocol):
@@ -14,6 +19,17 @@ class ObservationRepository(Protocol):
 
 class MemoryRepository(Protocol):
     def add(self, memory: AutobiographicalMemory) -> None: ...
+
+    def get(self, memory_id: str) -> AutobiographicalMemory | None: ...
+
+    def update_status(self, *, memory_id: str, status: RecordStatus) -> None: ...
+
+    def list_for_belief(
+        self,
+        *,
+        agent_id: str,
+        belief_key: str,
+    ) -> list[AutobiographicalMemory]: ...
 
     def search(
         self,
