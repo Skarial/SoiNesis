@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import soinesis.experiments.exp_001_p2_export as export_module
 from soinesis.experiments.exp_001_p2 import ExperimentDataset, load_datasets
 from soinesis.experiments.exp_001_p2_export import (
     FROZEN_DATASET_SHA256,
@@ -20,17 +21,42 @@ _DATASET_PATH = Path("data/exp-001-p2/datasets-v1.json")
 _CODE_COMMIT = "1" * 40
 
 
-@pytest.fixture(scope="module")
-def frozen_dataset_run(
-    tmp_path_factory: pytest.TempPathFactory,
-) -> tuple[ExperimentDataset, DatasetRun]:
-    dataset = load_datasets(_DATASET_PATH)[0]
+def _development_dataset_file(tmp_path: Path) -> Path:
+    """Crée un corpus de développement distinct sans exécuter les valeurs officielles."""
+
+    payload = json.loads(_DATASET_PATH.read_text(encoding="utf-8"))
+    for dataset in payload["datasets"]:
+        dataset["id"] = f"dev-{dataset['id']}"
+        dataset["namespace"] = f"dev-{dataset['namespace']}"
+    for chain in payload["chains"]:
+        chain["subject_template"] = f"DEV {chain['subject_template']}"
+        chain["values"] = [f"dev-{value}" for value in chain["values"]]
+        if chain["misleading_value"] is not None:
+            chain["misleading_value"] = f"dev-{chain['misleading_value']}"
+
+    path = tmp_path / "datasets-development.json"
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    return path
+
+
+@pytest.fixture
+def development_export_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, ExperimentDataset, DatasetRun]:
+    dataset_path = _development_dataset_file(tmp_path)
+    monkeypatch.setattr(export_module, "FROZEN_DATASET_SHA256", sha256_file(dataset_path))
+    dataset = load_datasets(dataset_path)[0]
     run = run_dataset(
         dataset=dataset,
-        work_directory=tmp_path_factory.mktemp("p2-export-run"),
+        work_directory=tmp_path / "p2-export-run",
         code_commit=_CODE_COMMIT,
     )
-    return dataset, run
+    return dataset_path, dataset, run
 
 
 def test_frozen_dataset_matches_preregistered_byte_hash(tmp_path: Path) -> None:
@@ -45,19 +71,19 @@ def test_frozen_dataset_matches_preregistered_byte_hash(tmp_path: Path) -> None:
 
 def test_export_writes_raw_trials_in_frozen_order_with_immediate_checksums(
     tmp_path: Path,
-    frozen_dataset_run: tuple[ExperimentDataset, DatasetRun],
+    development_export_run: tuple[Path, ExperimentDataset, DatasetRun],
 ) -> None:
-    dataset, run = frozen_dataset_run
+    dataset_path, dataset, run = development_export_run
     bundle = export_run_bundle(
         output_directory=tmp_path / "bundle",
-        dataset_path=_DATASET_PATH,
+        dataset_path=dataset_path,
         datasets=(dataset,),
         runs=(run,),
         code_commit=_CODE_COMMIT,
     )
 
     assert isinstance(bundle, ExportedRunBundle)
-    assert bundle.manifest.dataset_sha256 == FROZEN_DATASET_SHA256
+    assert bundle.manifest.dataset_sha256 == sha256_file(dataset_path)
     assert bundle.manifest.complete_dataset_suite is False
     assert bundle.manifest.result_count == len(run.results)
     assert bundle.checksums.raw_trials_sha256 == sha256_file(bundle.raw_trials_path)
@@ -75,13 +101,13 @@ def test_export_writes_raw_trials_in_frozen_order_with_immediate_checksums(
 
 def test_export_refuses_to_overwrite_an_existing_bundle(
     tmp_path: Path,
-    frozen_dataset_run: tuple[ExperimentDataset, DatasetRun],
+    development_export_run: tuple[Path, ExperimentDataset, DatasetRun],
 ) -> None:
-    dataset, run = frozen_dataset_run
+    dataset_path, dataset, run = development_export_run
     output_directory = tmp_path / "bundle-once"
     export_run_bundle(
         output_directory=output_directory,
-        dataset_path=_DATASET_PATH,
+        dataset_path=dataset_path,
         datasets=(dataset,),
         runs=(run,),
         code_commit=_CODE_COMMIT,
@@ -90,7 +116,7 @@ def test_export_refuses_to_overwrite_an_existing_bundle(
     with pytest.raises(FileExistsError, match="aucun écrasement silencieux"):
         export_run_bundle(
             output_directory=output_directory,
-            dataset_path=_DATASET_PATH,
+            dataset_path=dataset_path,
             datasets=(dataset,),
             runs=(run,),
             code_commit=_CODE_COMMIT,
@@ -98,13 +124,13 @@ def test_export_refuses_to_overwrite_an_existing_bundle(
 
 
 def test_manifest_rejects_a_commit_different_from_the_executed_run(
-    frozen_dataset_run: tuple[ExperimentDataset, DatasetRun],
+    development_export_run: tuple[Path, ExperimentDataset, DatasetRun],
 ) -> None:
-    dataset, run = frozen_dataset_run
+    dataset_path, dataset, run = development_export_run
 
     with pytest.raises(ValueError, match="commit figé"):
         build_freeze_manifest(
-            dataset_path=_DATASET_PATH,
+            dataset_path=dataset_path,
             datasets=(dataset,),
             runs=(run,),
             code_commit="2" * 40,
