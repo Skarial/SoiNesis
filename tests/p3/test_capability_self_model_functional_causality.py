@@ -8,10 +8,15 @@ from soinesis.application.capabilities import (
     CapabilitySelfModelRevisionStatus,
     DecayedBetaEstimator,
     MetacognitiveCapabilityUpdateService,
+    SelfAttributeCapabilityDecisionService,
     SelfAttributeCapabilityEstimateProvider,
     SignificantSelfRevisionPolicy,
 )
-from soinesis.domain.capabilities import CapabilityAction, CapabilityPerformanceObservation
+from soinesis.domain.capabilities import (
+    CapabilityAction,
+    CapabilityHistoryBoundary,
+    CapabilityPerformanceObservation,
+)
 from soinesis.domain.models import SourceType
 from soinesis.infrastructure.sqlite import SQLiteCapabilityUnitOfWorkFactory, SQLiteDatabase
 
@@ -45,7 +50,11 @@ def test_performance_to_self_model_to_decision_is_functionally_causal(tmp_path: 
         clock=FixedClock(),
         identifiers=identifiers,
     ).initialize(agent_id="agent-1", capability_key="ALPHA")
-    provider = SelfAttributeCapabilityEstimateProvider()
+    decision_service = SelfAttributeCapabilityDecisionService(
+        unit_of_work_factory=factory,
+        estimate_provider=SelfAttributeCapabilityEstimateProvider(),
+        decision_policy=decision_policy,
+    )
 
     with factory() as unit_of_work:
         initial_attribute = unit_of_work.capability_self_attributes.get_current(
@@ -53,9 +62,16 @@ def test_performance_to_self_model_to_decision_is_functionally_causal(tmp_path: 
             capability_key="ALPHA",
         )
     assert initial_attribute is not None
-    initial_estimate = provider.estimate(attribute=initial_attribute)
-    initial_decision = decision_policy.decide(initial_estimate)
-    assert initial_estimate.estimated_success == 0.60
+    initial_decision = decision_service.decide(
+        boundary=CapabilityHistoryBoundary(
+            agent_id="agent-1",
+            capability_key="ALPHA",
+            trial_id="trial-initial-decision",
+            cycle_id="cycle-initial-decision",
+            sequence_index=0,
+        )
+    )
+    assert initial_decision.estimate.estimated_success == 0.60
     assert initial_decision.action is CapabilityAction.VERIFY
 
     update_service = MetacognitiveCapabilityUpdateService(
@@ -93,9 +109,15 @@ def test_performance_to_self_model_to_decision_is_functionally_causal(tmp_path: 
     assert attribute_before_revision == initial_attribute
     assert meta_before_revision is not None
     assert meta_before_revision.state.estimated_success >= 0.80
-    estimate_before_revision = provider.estimate(attribute=attribute_before_revision)
-    decision_before_revision = decision_policy.decide(estimate_before_revision)
-    assert estimate_before_revision.estimated_success == 0.60
+    next_boundary = CapabilityHistoryBoundary(
+        agent_id="agent-1",
+        capability_key="ALPHA",
+        trial_id="trial-next-decision",
+        cycle_id="cycle-next-decision",
+        sequence_index=7,
+    )
+    decision_before_revision = decision_service.decide(boundary=next_boundary)
+    assert decision_before_revision.estimate.estimated_success == 0.60
     assert decision_before_revision.action is CapabilityAction.VERIFY
 
     revision = CapabilitySelfModelRevisionService(
@@ -114,7 +136,9 @@ def test_performance_to_self_model_to_decision_is_functionally_causal(tmp_path: 
     assert revision.status is CapabilitySelfModelRevisionStatus.REVISED
     assert attribute_after_revision is not None
     assert attribute_after_revision != initial_attribute
-    estimate_after_revision = provider.estimate(attribute=attribute_after_revision)
-    decision_after_revision = decision_policy.decide(estimate_after_revision)
-    assert estimate_after_revision.estimated_success == meta_before_revision.state.estimated_success
+    decision_after_revision = decision_service.decide(boundary=next_boundary)
+    assert (
+        decision_after_revision.estimate.estimated_success
+        == meta_before_revision.state.estimated_success
+    )
     assert decision_after_revision.action is CapabilityAction.DIRECT

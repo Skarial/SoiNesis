@@ -149,7 +149,7 @@ class CapabilitySelfModelIntegrityError(ValueError):
 
 
 class CapabilitySelfModelNotInitializedError(CapabilitySelfModelIntegrityError):
-    """Refuser une révision lorsque la capacité n'a pas de représentation initiale."""
+    """Refuser un chemin qui exige une représentation de capacité initialisée."""
 
 
 def is_admissible_self_performance(
@@ -338,6 +338,89 @@ class SelfAttributeCapabilityEstimateProvider:
             estimated_success=attribute.estimated_success,
             source=EstimateSource.SELF_ATTRIBUTE,
         )
+
+
+class FixedCapabilityDecisionService:
+    """Décider pour A depuis la seule estimation fixe, sans ouvrir de UoW."""
+
+    def __init__(
+        self,
+        *,
+        estimate_provider: FixedCapabilityEstimateProvider,
+        decision_policy: CapabilityDecisionPolicy,
+    ) -> None:
+        self._estimate_provider = estimate_provider
+        self._decision_policy = decision_policy
+
+    def decide(self, *, boundary: CapabilityHistoryBoundary) -> CapabilityDecision:
+        """Produire la décision fixe depuis le contexte public courant."""
+        estimate = self._estimate_provider.estimate(
+            agent_id=boundary.agent_id,
+            capability_key=boundary.capability_key,
+        )
+        return self._decision_policy.decide(estimate)
+
+
+class RawHistoryCapabilityDecisionService:
+    """Chemin décisionnel brut unique destiné à B et à la future SELF-ABL."""
+
+    def __init__(
+        self,
+        *,
+        unit_of_work_factory: CapabilityUnitOfWorkFactory,
+        estimate_provider: RawHistoryCapabilityEstimateProvider,
+        decision_policy: CapabilityDecisionPolicy,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._estimate_provider = estimate_provider
+        self._decision_policy = decision_policy
+
+    def decide(self, *, boundary: CapabilityHistoryBoundary) -> CapabilityDecision:
+        """Reconstruire uniquement depuis les performances strictement antérieures."""
+        with self._unit_of_work_factory() as unit_of_work:
+            history = unit_of_work.capability_performances.list_before(boundary=boundary)
+        estimate = self._estimate_provider.estimate(
+            agent_id=boundary.agent_id,
+            capability_key=boundary.capability_key,
+            history=history,
+        )
+        return self._decision_policy.decide(estimate)
+
+
+class SelfAttributeCapabilityDecisionService:
+    """Décider pour C depuis le seul CapabilitySelfAttribute courant."""
+
+    def __init__(
+        self,
+        *,
+        unit_of_work_factory: CapabilityUnitOfWorkFactory,
+        estimate_provider: SelfAttributeCapabilityEstimateProvider,
+        decision_policy: CapabilityDecisionPolicy,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._estimate_provider = estimate_provider
+        self._decision_policy = decision_policy
+
+    def decide(self, *, boundary: CapabilityHistoryBoundary) -> CapabilityDecision:
+        """Lire l'attribut consolidé ou refuser une capacité non initialisée."""
+        with self._unit_of_work_factory() as unit_of_work:
+            attribute = unit_of_work.capability_self_attributes.get_current(
+                agent_id=boundary.agent_id,
+                capability_key=boundary.capability_key,
+            )
+        if attribute is None:
+            raise CapabilitySelfModelNotInitializedError(
+                "La capacité doit être initialisée avant toute décision depuis le SelfModel."
+            )
+        if (
+            attribute.agent_id != boundary.agent_id
+            or attribute.capability_key != boundary.capability_key
+        ):
+            raise CapabilitySelfModelIntegrityError(
+                "Le CapabilitySelfAttribute courant appartient à un autre périmètre."
+            )
+        estimate = self._estimate_provider.estimate(attribute=attribute)
+        return self._decision_policy.decide(estimate)
 
 
 def _validate_metacognitive_state(
