@@ -19,6 +19,7 @@ from soinesis.domain.models import (
     RecordStatus,
     SourceType,
 )
+from soinesis.infrastructure.sqlite.migrations import apply_capability_schema_migrations
 
 
 def _normalise_search_text(value: str) -> str:
@@ -110,6 +111,13 @@ class SQLiteDatabase:
                 ON memories(agent_id, belief_key, created_at)
                 """
             )
+
+    def initialize_capability_schema(self) -> None:
+        """Initialiser le socle historique puis les migrations de capacité opt-in."""
+        self.initialize_schema()
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            apply_capability_schema_migrations(connection)
 
     @staticmethod
     def _migrate_memories_for_p2(connection: sqlite3.Connection) -> None:
