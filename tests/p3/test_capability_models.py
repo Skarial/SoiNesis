@@ -187,6 +187,8 @@ def test_versioned_metacognitive_state_scopes_and_versions_the_statistical_state
 
     assert versioned_state.state == statistical_state
     assert versioned_state.version == 1
+    assert versioned_state.last_processed_performance_id is None
+    assert versioned_state.last_processed_sequence_index is None
 
     with pytest.raises(ValidationError):
         VersionedMetacognitiveCapabilityState(
@@ -195,6 +197,68 @@ def test_versioned_metacognitive_state_scopes_and_versions_the_statistical_state
             version=0,
             state=statistical_state,
         )
+
+
+def test_versioned_metacognitive_state_requires_a_complete_versioned_cursor() -> None:
+    statistical_state = MetacognitiveCapabilityState(alpha=4.0, beta=2.0, lambda_=0.9)
+    updated = VersionedMetacognitiveCapabilityState(
+        agent_id="agent-1",
+        capability_key="ALPHA",
+        version=2,
+        state=statistical_state,
+        last_processed_performance_id="performance-1",
+        last_processed_sequence_index=0,
+    )
+
+    assert updated.last_processed_performance_id == "performance-1"
+    assert updated.last_processed_sequence_index == 0
+    assert {
+        "last_processed_performance_id",
+        "last_processed_sequence_index",
+    }.isdisjoint(MetacognitiveCapabilityState.model_fields)
+
+    invalid_states = (
+        {
+            "version": 1,
+            "last_processed_performance_id": "performance-1",
+            "last_processed_sequence_index": 0,
+        },
+        {
+            "version": 2,
+            "last_processed_performance_id": None,
+            "last_processed_sequence_index": None,
+        },
+        {
+            "version": 2,
+            "last_processed_performance_id": "performance-1",
+            "last_processed_sequence_index": None,
+        },
+        {
+            "version": 2,
+            "last_processed_performance_id": None,
+            "last_processed_sequence_index": 0,
+        },
+        {
+            "version": 2,
+            "last_processed_performance_id": "performance-1",
+            "last_processed_sequence_index": -1,
+        },
+        {
+            "version": 2,
+            "last_processed_performance_id": "performance-1",
+            "last_processed_sequence_index": 0.5,
+        },
+    )
+    for invalid_state in invalid_states:
+        with pytest.raises(ValidationError):
+            VersionedMetacognitiveCapabilityState.model_validate(
+                {
+                    "agent_id": "agent-1",
+                    "capability_key": "ALPHA",
+                    "state": statistical_state,
+                    **invalid_state,
+                }
+            )
 
 
 def test_self_attribute_contains_only_a_consolidated_capability_estimate() -> None:

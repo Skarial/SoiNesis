@@ -56,12 +56,22 @@ def build_metacognitive_state(
     capability_key: str = "ALPHA",
     alpha: float = 3.0,
     beta: float = 2.0,
+    last_processed_performance_id: str | None = None,
+    last_processed_sequence_index: int | None = None,
 ) -> VersionedMetacognitiveCapabilityState:
+    if version > 1:
+        last_processed_performance_id = (
+            last_processed_performance_id or f"performance-{version - 1}"
+        )
+        if last_processed_sequence_index is None:
+            last_processed_sequence_index = version - 2
     return VersionedMetacognitiveCapabilityState(
         agent_id=agent_id,
         capability_key=capability_key,
         version=version,
         state=MetacognitiveCapabilityState(alpha=alpha, beta=beta, lambda_=0.9),
+        last_processed_performance_id=last_processed_performance_id,
+        last_processed_sequence_index=last_processed_sequence_index,
     )
 
 
@@ -119,6 +129,8 @@ def test_performance_add_and_read_round_trip(tmp_path: Path) -> None:
         unit_of_work.commit()
 
     with factory() as unit_of_work:
+        persisted = unit_of_work.capability_performances.get(observation.id)
+        missing = unit_of_work.capability_performances.get("missing")
         history = unit_of_work.capability_performances.list_before(
             boundary=CapabilityHistoryBoundary(
                 agent_id="agent-1",
@@ -129,6 +141,8 @@ def test_performance_add_and_read_round_trip(tmp_path: Path) -> None:
             )
         )
 
+    assert persisted == observation
+    assert missing is None
     assert history == [observation]
 
 
@@ -239,7 +253,10 @@ def test_metacognitive_state_creation_and_update_are_versioned(tmp_path: Path) -
             capability_key="ALPHA",
         )
 
+    assert current is not None
     assert current == second
+    assert current.last_processed_performance_id == "performance-1"
+    assert current.last_processed_sequence_index == 0
 
 
 def test_metacognitive_state_rejects_invalid_initial_and_version_jump(tmp_path: Path) -> None:

@@ -26,6 +26,12 @@ class InMemoryCapabilityPerformanceContractProbe:
     def add(self, observation: CapabilityPerformanceObservation) -> None:
         self._observations.append(observation)
 
+    def get(self, observation_id: str) -> CapabilityPerformanceObservation | None:
+        return next(
+            (observation for observation in self._observations if observation.id == observation_id),
+            None,
+        )
+
     def list_before(
         self,
         *,
@@ -120,6 +126,19 @@ def test_performance_history_port_exposes_only_a_nominal_causal_boundary() -> No
 
     assert tuple(parameters) == ("self", "boundary")
     assert parameters["boundary"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_performance_repository_reads_only_a_persisted_identifier() -> None:
+    repository: CapabilityPerformanceRepository = InMemoryCapabilityPerformanceContractProbe()
+    observation = build_observation(identifier="performance-1", sequence_index=0)
+    repository.add(observation)
+
+    assert repository.get(observation.id) == observation
+    assert repository.get("missing") is None
+    assert tuple(inspect.signature(CapabilityPerformanceRepository.get).parameters) == (
+        "self",
+        "observation_id",
+    )
 
 
 def test_metacognitive_replace_contract_requires_an_expected_version() -> None:

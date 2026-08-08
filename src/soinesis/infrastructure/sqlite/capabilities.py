@@ -48,6 +48,18 @@ class SQLiteCapabilityPerformanceRepository:
             ),
         )
 
+    def get(self, observation_id: str) -> CapabilityPerformanceObservation | None:
+        row = self._connection.execute(
+            """
+            SELECT id, agent_id, trial_id, cycle_id, sequence_index,
+                   capability_key, intrinsic_success, observed_at, source_type
+            FROM capability_performances
+            WHERE id = ?
+            """,
+            (observation_id,),
+        ).fetchone()
+        return None if row is None else _capability_performance_from_row(row)
+
     def list_before(
         self,
         *,
@@ -84,7 +96,8 @@ class SQLiteMetacognitiveStateRepository:
     ) -> VersionedMetacognitiveCapabilityState | None:
         row = self._connection.execute(
             """
-            SELECT agent_id, capability_key, version, alpha, beta, decay_lambda
+            SELECT agent_id, capability_key, version, alpha, beta, decay_lambda,
+                   last_processed_performance_id, last_processed_sequence_index
             FROM metacognitive_states
             WHERE agent_id = ? AND capability_key = ?
             """,
@@ -109,7 +122,9 @@ class SQLiteMetacognitiveStateRepository:
         cursor = self._connection.execute(
             """
             UPDATE metacognitive_states
-            SET version = ?, alpha = ?, beta = ?, decay_lambda = ?
+            SET version = ?, alpha = ?, beta = ?, decay_lambda = ?,
+                last_processed_performance_id = ?,
+                last_processed_sequence_index = ?
             WHERE agent_id = ?
               AND capability_key = ?
               AND version = ?
@@ -119,6 +134,8 @@ class SQLiteMetacognitiveStateRepository:
                 state.state.alpha,
                 state.state.beta,
                 state.state.lambda_,
+                state.last_processed_performance_id,
+                state.last_processed_sequence_index,
                 state.agent_id,
                 state.capability_key,
                 expected_version,
@@ -136,8 +153,9 @@ class SQLiteMetacognitiveStateRepository:
             self._connection.execute(
                 """
                 INSERT INTO metacognitive_states (
-                    agent_id, capability_key, version, alpha, beta, decay_lambda
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    agent_id, capability_key, version, alpha, beta, decay_lambda,
+                    last_processed_performance_id, last_processed_sequence_index
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     state.agent_id,
@@ -146,6 +164,8 @@ class SQLiteMetacognitiveStateRepository:
                     state.state.alpha,
                     state.state.beta,
                     state.state.lambda_,
+                    state.last_processed_performance_id,
+                    state.last_processed_sequence_index,
                 ),
             )
         except sqlite3.IntegrityError as error:
@@ -338,6 +358,8 @@ def _capability_performance_from_row(row: sqlite3.Row) -> CapabilityPerformanceO
 
 
 def _metacognitive_state_from_row(row: sqlite3.Row) -> VersionedMetacognitiveCapabilityState:
+    last_processed_performance_id = row["last_processed_performance_id"]
+    last_processed_sequence_index = row["last_processed_sequence_index"]
     return VersionedMetacognitiveCapabilityState(
         agent_id=str(row["agent_id"]),
         capability_key=str(row["capability_key"]),
@@ -346,6 +368,12 @@ def _metacognitive_state_from_row(row: sqlite3.Row) -> VersionedMetacognitiveCap
             alpha=float(row["alpha"]),
             beta=float(row["beta"]),
             lambda_=float(row["decay_lambda"]),
+        ),
+        last_processed_performance_id=(
+            None if last_processed_performance_id is None else str(last_processed_performance_id)
+        ),
+        last_processed_sequence_index=(
+            None if last_processed_sequence_index is None else int(last_processed_sequence_index)
         ),
     )
 

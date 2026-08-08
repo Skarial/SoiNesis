@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Final
 
-CAPABILITY_SCHEMA_VERSION: Final = 1
-CAPABILITY_SCHEMA_MIGRATION_NAME: Final = "capability_persistence"
+CAPABILITY_SCHEMA_VERSION: Final = 2
+CAPABILITY_SCHEMA_MIGRATION_NAME: Final = "metacognitive_proof_cursor"
 
-_CAPABILITY_SCHEMA_STATEMENTS: Final[tuple[str, ...]] = (
+
+@dataclass(frozen=True)
+class _CapabilitySchemaMigration:
+    version: int
+    name: str
+    statements: tuple[str, ...]
+    preflight: Callable[[sqlite3.Connection], None] | None = None
+
+
+_CAPABILITY_SCHEMA_V1_STATEMENTS: Final[tuple[str, ...]] = (
     """
     CREATE TABLE capability_performances (
         id TEXT PRIMARY KEY NOT NULL,
@@ -240,6 +251,59 @@ _CAPABILITY_SCHEMA_STATEMENTS: Final[tuple[str, ...]] = (
     """,
 )
 
+_CAPABILITY_SCHEMA_V2_STATEMENTS: Final[tuple[str, ...]] = (
+    """
+    ALTER TABLE metacognitive_states
+    ADD COLUMN last_processed_performance_id TEXT
+    """,
+    """
+    ALTER TABLE metacognitive_states
+    ADD COLUMN last_processed_sequence_index INTEGER CHECK (
+        (
+            version = 1
+            AND last_processed_performance_id IS NULL
+            AND last_processed_sequence_index IS NULL
+        )
+        OR (
+            version > 1
+            AND last_processed_performance_id IS NOT NULL
+            AND last_processed_sequence_index IS NOT NULL
+            AND typeof(last_processed_sequence_index) = 'integer'
+            AND last_processed_sequence_index >= 0
+        )
+    )
+    """,
+)
+
+
+def _refuse_ambiguous_metacognitive_cursor_backfill(
+    connection: sqlite3.Connection,
+) -> None:
+    """Refuser d'inventer un curseur pour un état v1 déjà mis à jour."""
+    legacy_updated_state = connection.execute(
+        "SELECT 1 FROM metacognitive_states WHERE version > 1 LIMIT 1"
+    ).fetchone()
+    if legacy_updated_state is not None:
+        raise sqlite3.IntegrityError(
+            "La migration du curseur métacognitif ne peut pas déduire la preuve "
+            "traitée d'un état historique de version supérieure à 1."
+        )
+
+
+_CAPABILITY_SCHEMA_MIGRATIONS: Final[tuple[_CapabilitySchemaMigration, ...]] = (
+    _CapabilitySchemaMigration(
+        version=1,
+        name="capability_persistence",
+        statements=_CAPABILITY_SCHEMA_V1_STATEMENTS,
+    ),
+    _CapabilitySchemaMigration(
+        version=2,
+        name=CAPABILITY_SCHEMA_MIGRATION_NAME,
+        statements=_CAPABILITY_SCHEMA_V2_STATEMENTS,
+        preflight=_refuse_ambiguous_metacognitive_cursor_backfill,
+    ),
+)
+
 
 def apply_capability_schema_migrations(connection: sqlite3.Connection) -> None:
     """Appliquer dans la transaction courante les migrations de capacité manquantes."""
@@ -251,20 +315,31 @@ def apply_capability_schema_migrations(connection: sqlite3.Connection) -> None:
         )
         """
     )
-    applied = connection.execute(
-        "SELECT 1 FROM capability_schema_migrations WHERE version = ?",
-        (CAPABILITY_SCHEMA_VERSION,),
-    ).fetchone()
-    if applied is not None:
-        return
+    applied_versions = {
+        int(row["version"])
+        for row in connection.execute("SELECT version FROM capability_schema_migrations").fetchall()
+    }
+    known_versions = {migration.version for migration in _CAPABILITY_SCHEMA_MIGRATIONS}
+    unsupported_versions = applied_versions - known_versions
+    if unsupported_versions:
+        raise RuntimeError("La base utilise une version de schéma P3 non prise en charge.")
 
-    for statement in _CAPABILITY_SCHEMA_STATEMENTS:
-        connection.execute(statement)
+    expected_prefix = set(range(1, max(applied_versions, default=0) + 1))
+    if applied_versions != expected_prefix:
+        raise RuntimeError("Les migrations P3 appliquées ne forment pas une suite continue.")
 
-    connection.execute(
-        """
-        INSERT INTO capability_schema_migrations (version, name)
-        VALUES (?, ?)
-        """,
-        (CAPABILITY_SCHEMA_VERSION, CAPABILITY_SCHEMA_MIGRATION_NAME),
-    )
+    for migration in _CAPABILITY_SCHEMA_MIGRATIONS:
+        if migration.version in applied_versions:
+            continue
+        if migration.preflight is not None:
+            migration.preflight(connection)
+        for statement in migration.statements:
+            connection.execute(statement)
+        connection.execute(
+            """
+            INSERT INTO capability_schema_migrations (version, name)
+            VALUES (?, ?)
+            """,
+            (migration.version, migration.name),
+        )
+        applied_versions.add(migration.version)

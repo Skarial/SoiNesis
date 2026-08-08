@@ -76,6 +76,27 @@ class VersionedMetacognitiveCapabilityState(DomainModel):
     capability_key: str = Field(min_length=1)
     version: int = Field(ge=1, strict=True)
     state: MetacognitiveCapabilityState
+    last_processed_performance_id: str | None = Field(default=None, min_length=1)
+    last_processed_sequence_index: int | None = Field(default=None, ge=0, strict=True)
+
+    @model_validator(mode="after")
+    def validate_evidence_cursor(self) -> VersionedMetacognitiveCapabilityState:
+        """Lier toute version postérieure au prior à sa dernière preuve incorporée."""
+        cursor_is_empty = (
+            self.last_processed_performance_id is None
+            and self.last_processed_sequence_index is None
+        )
+        cursor_is_complete = (
+            self.last_processed_performance_id is not None
+            and self.last_processed_sequence_index is not None
+        )
+        if self.version == 1 and not cursor_is_empty:
+            raise ValueError("L'état métacognitif prior ne peut pas avoir de preuve traitée.")
+        if self.version > 1 and not cursor_is_complete:
+            raise ValueError(
+                "Un état métacognitif mis à jour doit identifier sa dernière preuve traitée."
+            )
+        return self
 
 
 class CapabilitySelfAttribute(DomainModel):

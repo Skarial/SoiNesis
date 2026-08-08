@@ -34,6 +34,58 @@ def column_names(connection: sqlite3.Connection, table: str) -> set[str]:
     }
 
 
+def migration_versions(connection: sqlite3.Connection) -> list[int]:
+    rows = connection.execute(
+        "SELECT version FROM capability_schema_migrations ORDER BY version"
+    ).fetchall()
+    return [int(row["version"]) for row in rows]
+
+
+def initialize_synthetic_capability_v1(
+    database: SQLiteDatabase,
+    *,
+    state_version: int = 1,
+    conflicting_sequence_column: bool = False,
+) -> None:
+    database.initialize_capability_schema()
+    with database.connect() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute(
+            "DELETE FROM capability_schema_migrations WHERE version = ?",
+            (CAPABILITY_SCHEMA_VERSION,),
+        )
+        connection.execute(
+            "ALTER TABLE metacognitive_states DROP COLUMN last_processed_sequence_index"
+        )
+        connection.execute(
+            "ALTER TABLE metacognitive_states DROP COLUMN last_processed_performance_id"
+        )
+        connection.execute(
+            """
+            INSERT INTO metacognitive_states (
+                agent_id, capability_key, version, alpha, beta, decay_lambda
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("agent-1", "ALPHA", 1, 3.0, 2.0, 0.9),
+        )
+        if state_version > 1:
+            connection.execute(
+                """
+                UPDATE metacognitive_states
+                SET version = ?, alpha = ?, beta = ?
+                WHERE agent_id = ? AND capability_key = ?
+                """,
+                (state_version, 4.0, 2.5, "agent-1", "ALPHA"),
+            )
+        if conflicting_sequence_column:
+            connection.execute(
+                """
+                ALTER TABLE metacognitive_states
+                ADD COLUMN last_processed_sequence_index INTEGER
+                """
+            )
+
+
 def test_capability_migration_creates_a_fresh_schema_without_private_columns(
     tmp_path: Path,
 ) -> None:
@@ -43,8 +95,12 @@ def test_capability_migration_creates_a_fresh_schema_without_private_columns(
     with database.connect() as connection:
         tables = table_names(connection)
         performance_columns = column_names(connection, "capability_performances")
+        metacognitive_columns = column_names(connection, "metacognitive_states")
         cognitive_columns = {table: column_names(connection, table) for table in CAPABILITY_TABLES}
+        applied_versions = migration_versions(connection)
 
+    assert CAPABILITY_SCHEMA_VERSION == 2
+    assert applied_versions == [1, 2]
     assert tables >= CAPABILITY_TABLES
     assert "capability_schema_migrations" in tables
     assert performance_columns == {
@@ -58,6 +114,10 @@ def test_capability_migration_creates_a_fresh_schema_without_private_columns(
         "observed_at",
         "source_type",
     }
+    assert {
+        "last_processed_performance_id",
+        "last_processed_sequence_index",
+    }.issubset(metacognitive_columns)
     for columns in cognitive_columns.values():
         assert PRIVATE_EXPERIMENTAL_COLUMNS.isdisjoint(columns)
 
@@ -101,6 +161,84 @@ def test_capability_migration_preserves_a_synthetic_historical_schema(
     assert tables >= CAPABILITY_TABLES
 
 
+def test_capability_migration_upgrades_a_synthetic_v1_prior_without_loss(
+    tmp_path: Path,
+) -> None:
+    database = SQLiteDatabase(tmp_path / "capability-v1.db")
+    initialize_synthetic_capability_v1(database)
+
+    database.initialize_capability_schema()
+
+    with database.connect() as connection:
+        stored_state = connection.execute(
+            """
+            SELECT agent_id, capability_key, version, alpha, beta, decay_lambda,
+                   last_processed_performance_id, last_processed_sequence_index
+            FROM metacognitive_states
+            """
+        ).fetchone()
+        applied_versions = migration_versions(connection)
+
+    assert stored_state is not None
+    assert str(stored_state["agent_id"]) == "agent-1"
+    assert str(stored_state["capability_key"]) == "ALPHA"
+    assert int(stored_state["version"]) == 1
+    assert float(stored_state["alpha"]) == 3.0
+    assert float(stored_state["beta"]) == 2.0
+    assert float(stored_state["decay_lambda"]) == 0.9
+    assert stored_state["last_processed_performance_id"] is None
+    assert stored_state["last_processed_sequence_index"] is None
+    assert applied_versions == [1, 2]
+
+
+def test_capability_v2_migration_rolls_back_a_late_alter_failure(
+    tmp_path: Path,
+) -> None:
+    database = SQLiteDatabase(tmp_path / "capability-v2-conflict.db")
+    initialize_synthetic_capability_v1(database, conflicting_sequence_column=True)
+
+    with pytest.raises(sqlite3.OperationalError, match="duplicate column"):
+        database.initialize_capability_schema()
+
+    with database.connect() as connection:
+        columns = column_names(connection, "metacognitive_states")
+        applied_versions = migration_versions(connection)
+
+    assert "last_processed_performance_id" not in columns
+    assert "last_processed_sequence_index" in columns
+    assert applied_versions == [1]
+
+
+def test_capability_v2_migration_refuses_to_invent_a_legacy_cursor(
+    tmp_path: Path,
+) -> None:
+    database = SQLiteDatabase(tmp_path / "ambiguous-capability-v1.db")
+    initialize_synthetic_capability_v1(database, state_version=2)
+
+    with pytest.raises(sqlite3.IntegrityError, match="ne peut pas déduire"):
+        database.initialize_capability_schema()
+
+    with database.connect() as connection:
+        stored_state = connection.execute(
+            """
+            SELECT version, alpha, beta
+            FROM metacognitive_states
+            WHERE agent_id = ? AND capability_key = ?
+            """,
+            ("agent-1", "ALPHA"),
+        ).fetchone()
+        columns = column_names(connection, "metacognitive_states")
+        applied_versions = migration_versions(connection)
+
+    assert stored_state is not None
+    assert int(stored_state["version"]) == 2
+    assert float(stored_state["alpha"]) == 4.0
+    assert float(stored_state["beta"]) == 2.5
+    assert "last_processed_performance_id" not in columns
+    assert "last_processed_sequence_index" not in columns
+    assert applied_versions == [1]
+
+
 def test_capability_migration_is_idempotent_on_reopen(tmp_path: Path) -> None:
     database = SQLiteDatabase(tmp_path / "idempotent.db")
     database.initialize_capability_schema()
@@ -140,8 +278,10 @@ def test_capability_migration_is_idempotent_on_reopen(tmp_path: Path) -> None:
         performance_count = connection.execute(
             "SELECT COUNT(*) AS count FROM capability_performances"
         ).fetchone()["count"]
+        applied_versions = migration_versions(connection)
 
     assert int(migration_count) == 1
+    assert applied_versions == [1, 2]
     assert int(performance_count) == 1
 
 
@@ -186,6 +326,66 @@ def test_capability_schema_rejects_a_fractional_sequence_index(tmp_path: Path) -
                 "DIRECT_ENVIRONMENT",
             ),
         )
+
+
+def test_capability_v2_schema_enforces_the_cursor_pair_and_sequence_type(
+    tmp_path: Path,
+) -> None:
+    database = SQLiteDatabase(tmp_path / "metacognitive-cursor-check.db")
+    database.initialize_capability_schema()
+
+    invalid_cursors: tuple[tuple[str | None, int | float | None], ...] = (
+        (None, None),
+        ("performance-1", None),
+        (None, 0),
+        ("performance-1", -1),
+        ("performance-1", 0.5),
+    )
+    with database.connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO metacognitive_states (
+                agent_id, capability_key, version, alpha, beta, decay_lambda,
+                last_processed_performance_id, last_processed_sequence_index
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("agent-1", "ALPHA", 1, 3.0, 2.0, 0.9, None, None),
+        )
+        for performance_id, sequence_index in invalid_cursors:
+            with pytest.raises(sqlite3.IntegrityError):
+                connection.execute(
+                    """
+                    UPDATE metacognitive_states
+                    SET version = 2,
+                        last_processed_performance_id = ?,
+                        last_processed_sequence_index = ?
+                    WHERE agent_id = ? AND capability_key = ?
+                    """,
+                    (performance_id, sequence_index, "agent-1", "ALPHA"),
+                )
+
+        connection.execute(
+            """
+            UPDATE metacognitive_states
+            SET version = 2,
+                last_processed_performance_id = ?,
+                last_processed_sequence_index = ?
+            WHERE agent_id = ? AND capability_key = ?
+            """,
+            ("performance-1", 0, "agent-1", "ALPHA"),
+        )
+        stored_cursor = connection.execute(
+            """
+            SELECT version, last_processed_performance_id,
+                   last_processed_sequence_index
+            FROM metacognitive_states
+            """
+        ).fetchone()
+
+    assert stored_cursor is not None
+    assert int(stored_cursor["version"]) == 2
+    assert str(stored_cursor["last_processed_performance_id"]) == "performance-1"
+    assert int(stored_cursor["last_processed_sequence_index"]) == 0
 
 
 def test_snapshot_chain_constraints_hold_for_direct_sql(tmp_path: Path) -> None:

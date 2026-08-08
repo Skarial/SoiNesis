@@ -23,6 +23,10 @@ class CapabilityPerformanceRepository(Protocol):
 
     def add(self, observation: CapabilityPerformanceObservation) -> None: ...
 
+    def get(self, observation_id: str) -> CapabilityPerformanceObservation | None:
+        """Relire une preuve persistée exacte sans accepter un objet arbitraire en mémoire."""
+        ...
+
     def list_before(
         self,
         *,
