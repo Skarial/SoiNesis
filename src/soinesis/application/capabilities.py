@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from enum import StrEnum
+from math import isfinite
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -17,10 +18,12 @@ from soinesis.domain.capabilities import (
     CapabilitySelfAttribute,
     EstimateSource,
     MetacognitiveCapabilityState,
+    SelfModelVersion,
     VersionedMetacognitiveCapabilityState,
 )
-from soinesis.domain.models import SourceType
+from soinesis.domain.models import EventType, JournalEvent, SourceType
 from soinesis.ports.capabilities import CapabilityUnitOfWork, CapabilityUnitOfWorkFactory
+from soinesis.ports.system import Clock, IdentifierGenerator
 
 DEV_PRIOR_ALPHA: Final = 3.0
 DEV_PRIOR_BETA: Final = 2.0
@@ -28,6 +31,10 @@ FIXED_BASELINE_ESTIMATE: Final = 0.60
 HELP_VERIFY_BOUNDARY: Final = 0.50
 VERIFY_DIRECT_BOUNDARY: Final = 0.80
 ALLOWED_SELF_PERFORMANCE_SOURCE: Final = SourceType.DIRECT_ENVIRONMENT
+CAPABILITY_SELF_ATTRIBUTE_TARGET_TYPE: Final = "CapabilitySelfAttribute"
+CAPABILITY_SELF_MODEL_INITIALIZATION_CYCLE_ID: Final = "system-capability-self-model-initialization"
+CAPABILITY_SELF_MODEL_INITIALIZATION_REASON: Final = "INITIALIZATION"
+CAPABILITY_SELF_MODEL_REVISION_REASON: Final = "ACTION_BAND_CROSSING"
 
 
 class MetacognitiveUpdateStatus(StrEnum):
@@ -35,6 +42,20 @@ class MetacognitiveUpdateStatus(StrEnum):
 
     APPLIED = "APPLIED"
     ALREADY_PROCESSED = "ALREADY_PROCESSED"
+
+
+class CapabilitySelfModelInitializationStatus(StrEnum):
+    """Issues publiques de l'initialisation d'une capacité dans le SelfModel."""
+
+    INITIALIZED = "INITIALIZED"
+    ALREADY_INITIALIZED = "ALREADY_INITIALIZED"
+
+
+class CapabilitySelfModelRevisionStatus(StrEnum):
+    """Issues publiques d'une tentative de consolidation métacognitive."""
+
+    REVISED = "REVISED"
+    NO_REVISION = "NO_REVISION"
 
 
 class MetacognitiveCapabilityUpdateResult(BaseModel):
@@ -50,6 +71,53 @@ class MetacognitiveCapabilityUpdateResult(BaseModel):
     resulting_version: int = Field(ge=1, strict=True)
     previous_estimated_success: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
     resulting_estimated_success: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+
+
+class SignificantSelfRevisionAssessment(BaseModel):
+    """Comparaison pure des bandes décisionnelles avant et après consolidation."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    previous_action: CapabilityAction
+    resulting_action: CapabilityAction
+
+    @property
+    def is_significant(self) -> bool:
+        """Une révision est significative exactement lors d'un changement de bande."""
+        return self.previous_action is not self.resulting_action
+
+
+class CapabilitySelfModelInitializationResult(BaseModel):
+    """Résultat minimal et auditable du bootstrap d'une capacité."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    agent_id: str = Field(min_length=1)
+    capability_key: str = Field(min_length=1)
+    status: CapabilitySelfModelInitializationStatus
+    estimated_success: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+    action: CapabilityAction
+    self_model_version: int = Field(ge=1, strict=True)
+    attribute_version: int = Field(ge=1, strict=True)
+
+
+class CapabilitySelfModelRevisionResult(BaseModel):
+    """Résultat minimal d'une tentative de révision significative."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    agent_id: str = Field(min_length=1)
+    capability_key: str = Field(min_length=1)
+    status: CapabilitySelfModelRevisionStatus
+    previous_estimated_success: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+    resulting_estimated_success: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+    previous_action: CapabilityAction
+    resulting_action: CapabilityAction
+    previous_self_model_version: int = Field(ge=1, strict=True)
+    resulting_self_model_version: int = Field(ge=1, strict=True)
+    previous_attribute_version: int = Field(ge=1, strict=True)
+    resulting_attribute_version: int = Field(ge=1, strict=True)
+    triggering_performance_id: str | None = Field(default=None, min_length=1)
 
 
 class CapabilityPerformanceNotFoundError(LookupError):
@@ -70,6 +138,18 @@ class MetacognitiveLambdaMismatchError(ValueError):
 
 class MetacognitiveStateIntegrityError(ValueError):
     """Refuser un prior ou un curseur persistant incohérent avec les preuves."""
+
+
+class CapabilitySelfModelInitializationError(ValueError):
+    """Refuser un bootstrap tardif ou incompatible avec l'état déjà persistant."""
+
+
+class CapabilitySelfModelIntegrityError(ValueError):
+    """Refuser une chaîne SelfModel, SelfAttribute ou métacognitive incohérente."""
+
+
+class CapabilitySelfModelNotInitializedError(CapabilitySelfModelIntegrityError):
+    """Refuser une révision lorsque la capacité n'a pas de représentation initiale."""
 
 
 def is_admissible_self_performance(
@@ -152,19 +232,23 @@ class DecayedBetaEstimator:
 class CapabilityDecisionPolicy:
     """Politique commune calculant les utilités et l'action déclarées par P3."""
 
+    def action_for_estimated_success(self, estimated_success: float) -> CapabilityAction:
+        """Classer une estimation dans l'unique définition des bandes P3."""
+        if not isfinite(estimated_success) or not 0.0 <= estimated_success <= 1.0:
+            raise ValueError("L'estimation de succès doit être finie et comprise entre 0 et 1.")
+        if estimated_success < HELP_VERIFY_BOUNDARY:
+            return CapabilityAction.HELP
+        if estimated_success < VERIFY_DIRECT_BOUNDARY:
+            return CapabilityAction.VERIFY
+        return CapabilityAction.DIRECT
+
     def decide(self, estimate: CapabilityEstimate) -> CapabilityDecision:
         """Choisir une action avec les règles de départage exactes du protocole."""
         estimated_success = estimate.estimated_success
         direct_utility = 20.0 * estimated_success - 10.0
         verify_utility = 10.0 * estimated_success - 2.0
         help_utility = 2.0 * estimated_success + 2.0
-
-        if estimated_success < HELP_VERIFY_BOUNDARY:
-            action = CapabilityAction.HELP
-        elif estimated_success < VERIFY_DIRECT_BOUNDARY:
-            action = CapabilityAction.VERIFY
-        else:
-            action = CapabilityAction.DIRECT
+        action = self.action_for_estimated_success(estimated_success)
 
         return CapabilityDecision(
             estimate=estimate,
@@ -172,6 +256,29 @@ class CapabilityDecisionPolicy:
             direct_utility=direct_utility,
             verify_utility=verify_utility,
             help_utility=help_utility,
+        )
+
+
+class SignificantSelfRevisionPolicy:
+    """Politique DEV pure : réviser uniquement lors d'un changement de bande."""
+
+    def __init__(self, *, decision_policy: CapabilityDecisionPolicy) -> None:
+        self._decision_policy = decision_policy
+
+    def assess(
+        self,
+        *,
+        previous_estimated_success: float,
+        candidate_estimated_success: float,
+    ) -> SignificantSelfRevisionAssessment:
+        """Comparer les actions sans introduire de seuil de delta parallèle."""
+        return SignificantSelfRevisionAssessment(
+            previous_action=self._decision_policy.action_for_estimated_success(
+                previous_estimated_success
+            ),
+            resulting_action=self._decision_policy.action_for_estimated_success(
+                candidate_estimated_success
+            ),
         )
 
 
@@ -233,6 +340,126 @@ class SelfAttributeCapabilityEstimateProvider:
         )
 
 
+def _validate_metacognitive_state(
+    *,
+    unit_of_work: CapabilityUnitOfWork,
+    current: VersionedMetacognitiveCapabilityState,
+    estimator: DecayedBetaEstimator,
+) -> CapabilityPerformanceObservation | None:
+    """Valider le prior ou relire la preuve exacte désignée par le curseur."""
+    if current.state.lambda_ != estimator.lambda_:
+        raise MetacognitiveLambdaMismatchError(
+            "Le facteur lambda du service diffère de celui de l'état persistant."
+        )
+    if current.version == 1:
+        if current.state != estimator.initial_state():
+            raise MetacognitiveStateIntegrityError(
+                "La version métacognitive 1 ne correspond pas au prior DEV attendu."
+            )
+        return None
+
+    cursor_id = current.last_processed_performance_id
+    cursor_sequence_index = current.last_processed_sequence_index
+    if cursor_id is None or cursor_sequence_index is None:
+        raise MetacognitiveStateIntegrityError(
+            "L'état métacognitif persistant ne possède pas de curseur complet."
+        )
+    cursor_performance = unit_of_work.capability_performances.get(cursor_id)
+    if (
+        cursor_performance is None
+        or cursor_performance.agent_id != current.agent_id
+        or cursor_performance.capability_key != current.capability_key
+        or cursor_performance.sequence_index != cursor_sequence_index
+        or not is_admissible_self_performance(cursor_performance)
+    ):
+        raise MetacognitiveStateIntegrityError(
+            "Le curseur métacognitif ne correspond pas à une preuve propre persistée."
+        )
+    return cursor_performance
+
+
+def _validate_self_model_history(
+    *,
+    agent_id: str,
+    current: SelfModelVersion | None,
+    versions: list[SelfModelVersion],
+) -> None:
+    """Vérifier la chaîne globale append-only relue depuis la persistance."""
+    if current is None:
+        if versions:
+            raise CapabilitySelfModelIntegrityError(
+                "L'historique SelfModel existe sans version globale courante."
+            )
+        return
+    if not versions or versions[-1] != current:
+        raise CapabilitySelfModelIntegrityError(
+            "La version SelfModel courante ne correspond pas à la fin de l'historique."
+        )
+
+    previous_id: str | None = None
+    seen_ids: set[str] = set()
+    for expected_version, version in enumerate(versions, start=1):
+        if (
+            version.agent_id != agent_id
+            or version.version != expected_version
+            or version.previous_version_id != previous_id
+            or version.id in seen_ids
+        ):
+            raise CapabilitySelfModelIntegrityError(
+                "La chaîne globale des versions SelfModel est incohérente."
+            )
+        seen_ids.add(version.id)
+        previous_id = version.id
+
+
+def _validate_capability_attribute_history(
+    *,
+    agent_id: str,
+    capability_key: str,
+    current: CapabilitySelfAttribute | None,
+    versions: list[CapabilitySelfAttribute],
+    self_model_versions: list[SelfModelVersion],
+    expected_initial_estimated_success: float,
+) -> None:
+    """Vérifier la chaîne d'attribut et ses liens vers les snapshots globaux."""
+    if current is None:
+        if versions:
+            raise CapabilitySelfModelIntegrityError(
+                "L'historique d'attribut existe sans CapabilitySelfAttribute courant."
+            )
+        return
+    if not versions or versions[-1] != current:
+        raise CapabilitySelfModelIntegrityError(
+            "Le CapabilitySelfAttribute courant ne termine pas son historique."
+        )
+    if versions[0].estimated_success != expected_initial_estimated_success:
+        raise CapabilitySelfModelIntegrityError(
+            "Le CapabilitySelfAttribute initial ne correspond pas au prior DEV attendu."
+        )
+
+    model_versions_by_id = {version.id: version.version for version in self_model_versions}
+    previous_id: str | None = None
+    previous_model_version = 0
+    seen_ids: set[str] = set()
+    for expected_version, attribute in enumerate(versions, start=1):
+        linked_model_version = model_versions_by_id.get(attribute.self_model_version_id)
+        if (
+            attribute.agent_id != agent_id
+            or attribute.capability_key != capability_key
+            or attribute.attribute_version != expected_version
+            or attribute.previous_attribute_id != previous_id
+            or attribute.id in seen_ids
+            or linked_model_version is None
+            or linked_model_version <= previous_model_version
+        ):
+            raise CapabilitySelfModelIntegrityError(
+                "La chaîne du CapabilitySelfAttribute ou son lien SelfModel est incohérent."
+            )
+        seen_ids.add(attribute.id)
+        previous_id = attribute.id
+        previous_model_version = linked_model_version
+
+
 class MetacognitiveCapabilityUpdateService:
     """Incorporer exactement une fois une performance intrinsèque persistée."""
 
@@ -272,11 +499,11 @@ class MetacognitiveCapabilityUpdateService:
                     expected_version=None,
                 )
 
-            if current.state.lambda_ != self._estimator.lambda_:
-                raise MetacognitiveLambdaMismatchError(
-                    "Le facteur lambda du service diffère de celui de l'état persistant."
-                )
-            self._validate_persisted_state(unit_of_work=unit_of_work, current=current)
+            _validate_metacognitive_state(
+                unit_of_work=unit_of_work,
+                current=current,
+                estimator=self._estimator,
+            )
 
             if current.last_processed_performance_id == performance.id:
                 if current.last_processed_sequence_index != performance.sequence_index:
@@ -368,33 +595,344 @@ class MetacognitiveCapabilityUpdateService:
             resulting_estimated_success=estimated_success,
         )
 
-    def _validate_persisted_state(
+
+class CapabilitySelfModelInitializationService:
+    """Initialiser atomiquement le prior et la représentation d'une capacité."""
+
+    def __init__(
         self,
         *,
-        unit_of_work: CapabilityUnitOfWork,
-        current: VersionedMetacognitiveCapabilityState,
+        unit_of_work_factory: CapabilityUnitOfWorkFactory,
+        estimator: DecayedBetaEstimator,
+        clock: Clock,
+        identifiers: IdentifierGenerator,
     ) -> None:
-        if current.version == 1:
-            if current.state != self._estimator.initial_state():
-                raise MetacognitiveStateIntegrityError(
-                    "La version métacognitive 1 ne correspond pas au prior DEV attendu."
-                )
-            return
+        self._unit_of_work_factory = unit_of_work_factory
+        self._estimator = estimator
+        self._clock = clock
+        self._identifiers = identifiers
+        self._decision_policy = CapabilityDecisionPolicy()
 
-        cursor_id = current.last_processed_performance_id
-        cursor_sequence_index = current.last_processed_sequence_index
-        if cursor_id is None or cursor_sequence_index is None:
-            raise MetacognitiveStateIntegrityError(
-                "L'état métacognitif persistant ne possède pas de curseur complet."
+    def initialize(
+        self,
+        *,
+        agent_id: str,
+        capability_key: str,
+    ) -> CapabilitySelfModelInitializationResult:
+        """Créer une représentation initiale ou confirmer son existence cohérente."""
+        with self._unit_of_work_factory() as unit_of_work:
+            current_meta = unit_of_work.metacognitive_states.get_current(
+                agent_id=agent_id,
+                capability_key=capability_key,
             )
-        cursor_performance = unit_of_work.capability_performances.get(cursor_id)
-        if (
-            cursor_performance is None
-            or cursor_performance.agent_id != current.agent_id
-            or cursor_performance.capability_key != current.capability_key
-            or cursor_performance.sequence_index != cursor_sequence_index
-            or not is_admissible_self_performance(cursor_performance)
-        ):
-            raise MetacognitiveStateIntegrityError(
-                "Le curseur métacognitif ne correspond pas à une preuve propre persistée."
+            current_attribute = unit_of_work.capability_self_attributes.get_current(
+                agent_id=agent_id,
+                capability_key=capability_key,
             )
+            attribute_versions = unit_of_work.capability_self_attributes.list_versions(
+                agent_id=agent_id,
+                capability_key=capability_key,
+            )
+            current_model = unit_of_work.self_model_versions.get_current(agent_id=agent_id)
+            model_versions = unit_of_work.self_model_versions.list_versions(agent_id=agent_id)
+            _validate_self_model_history(
+                agent_id=agent_id,
+                current=current_model,
+                versions=model_versions,
+            )
+            _validate_capability_attribute_history(
+                agent_id=agent_id,
+                capability_key=capability_key,
+                current=current_attribute,
+                versions=attribute_versions,
+                self_model_versions=model_versions,
+                expected_initial_estimated_success=(
+                    self._estimator.initial_state().estimated_success
+                ),
+            )
+
+            if current_attribute is not None:
+                if current_meta is None or current_model is None:
+                    raise CapabilitySelfModelIntegrityError(
+                        "Une capacité initialisée doit posséder un état méta et un SelfModel."
+                    )
+                if (
+                    current_meta.agent_id != agent_id
+                    or current_meta.capability_key != capability_key
+                ):
+                    raise CapabilitySelfModelIntegrityError(
+                        "L'état métacognitif courant appartient à un autre périmètre."
+                    )
+                _validate_metacognitive_state(
+                    unit_of_work=unit_of_work,
+                    current=current_meta,
+                    estimator=self._estimator,
+                )
+                return CapabilitySelfModelInitializationResult(
+                    agent_id=agent_id,
+                    capability_key=capability_key,
+                    status=CapabilitySelfModelInitializationStatus.ALREADY_INITIALIZED,
+                    estimated_success=current_attribute.estimated_success,
+                    action=self._decision_policy.action_for_estimated_success(
+                        current_attribute.estimated_success
+                    ),
+                    self_model_version=current_model.version,
+                    attribute_version=current_attribute.attribute_version,
+                )
+
+            if current_meta is None:
+                current_meta = VersionedMetacognitiveCapabilityState(
+                    agent_id=agent_id,
+                    capability_key=capability_key,
+                    version=1,
+                    state=self._estimator.initial_state(),
+                )
+                create_meta = True
+            else:
+                create_meta = False
+                if (
+                    current_meta.agent_id != agent_id
+                    or current_meta.capability_key != capability_key
+                ):
+                    raise CapabilitySelfModelInitializationError(
+                        "L'état métacognitif à initialiser appartient à un autre périmètre."
+                    )
+                _validate_metacognitive_state(
+                    unit_of_work=unit_of_work,
+                    current=current_meta,
+                    estimator=self._estimator,
+                )
+                if current_meta.version > 1:
+                    raise CapabilitySelfModelInitializationError(
+                        "Une capacité déjà apprise ne peut pas être initialisée tardivement."
+                    )
+
+            now = self._clock.now()
+            new_model = SelfModelVersion(
+                id=self._identifiers.new("self-model-version"),
+                agent_id=agent_id,
+                version=1 if current_model is None else current_model.version + 1,
+                previous_version_id=None if current_model is None else current_model.id,
+                created_at=now,
+            )
+            initial_estimate = current_meta.state.estimated_success
+            initial_action = self._decision_policy.action_for_estimated_success(initial_estimate)
+            new_attribute = CapabilitySelfAttribute(
+                id=self._identifiers.new("capability-self-attribute"),
+                agent_id=agent_id,
+                capability_key=capability_key,
+                estimated_success=initial_estimate,
+                self_model_version_id=new_model.id,
+                attribute_version=1,
+                previous_attribute_id=None,
+                created_at=now,
+            )
+            event = JournalEvent(
+                id=self._identifiers.new("event"),
+                agent_id=agent_id,
+                cycle_id=CAPABILITY_SELF_MODEL_INITIALIZATION_CYCLE_ID,
+                event_type=EventType.CAPABILITY_SELF_ATTRIBUTE_INITIALIZED,
+                target_entity_type=CAPABILITY_SELF_ATTRIBUTE_TARGET_TYPE,
+                target_entity_id=new_attribute.id,
+                occurred_at=now,
+                reason=CAPABILITY_SELF_MODEL_INITIALIZATION_REASON,
+                new_value={
+                    "capability_key": capability_key,
+                    "previous_estimated_success": None,
+                    "resulting_estimated_success": initial_estimate,
+                    "previous_action": None,
+                    "resulting_action": initial_action.value,
+                    "metacognitive_state_version": current_meta.version,
+                    "evidence_through_performance_id": None,
+                    "evidence_through_sequence_index": None,
+                    "evidence_source_type": None,
+                    "source_type": SourceType.SYSTEM_RULE.value,
+                    "self_model_version": new_model.version,
+                    "attribute_version": new_attribute.attribute_version,
+                    "reason": CAPABILITY_SELF_MODEL_INITIALIZATION_REASON,
+                },
+            )
+            result = CapabilitySelfModelInitializationResult(
+                agent_id=agent_id,
+                capability_key=capability_key,
+                status=CapabilitySelfModelInitializationStatus.INITIALIZED,
+                estimated_success=initial_estimate,
+                action=initial_action,
+                self_model_version=new_model.version,
+                attribute_version=new_attribute.attribute_version,
+            )
+
+            if create_meta:
+                unit_of_work.metacognitive_states.replace_current(
+                    state=current_meta,
+                    expected_version=None,
+                )
+            unit_of_work.self_model_versions.add(new_model)
+            unit_of_work.capability_self_attributes.add(new_attribute)
+            unit_of_work.journal.append(event)
+            unit_of_work.commit()
+            return result
+
+
+class CapabilitySelfModelRevisionService:
+    """Consolider atomiquement un changement de bande métacognitif persistant."""
+
+    def __init__(
+        self,
+        *,
+        unit_of_work_factory: CapabilityUnitOfWorkFactory,
+        estimator: DecayedBetaEstimator,
+        revision_policy: SignificantSelfRevisionPolicy,
+        clock: Clock,
+        identifiers: IdentifierGenerator,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._estimator = estimator
+        self._revision_policy = revision_policy
+        self._clock = clock
+        self._identifiers = identifiers
+
+    def revise(
+        self,
+        *,
+        agent_id: str,
+        capability_key: str,
+    ) -> CapabilitySelfModelRevisionResult:
+        """Réviser depuis la persistance ou retourner explicitement NO_REVISION."""
+        with self._unit_of_work_factory() as unit_of_work:
+            current_meta = unit_of_work.metacognitive_states.get_current(
+                agent_id=agent_id,
+                capability_key=capability_key,
+            )
+            current_attribute = unit_of_work.capability_self_attributes.get_current(
+                agent_id=agent_id,
+                capability_key=capability_key,
+            )
+            current_model = unit_of_work.self_model_versions.get_current(agent_id=agent_id)
+            if current_meta is None or current_attribute is None or current_model is None:
+                raise CapabilitySelfModelNotInitializedError(
+                    "La capacité doit être initialisée avant toute révision du SelfModel."
+                )
+            if current_meta.agent_id != agent_id or current_meta.capability_key != capability_key:
+                raise CapabilitySelfModelIntegrityError(
+                    "L'état métacognitif courant appartient à un autre périmètre."
+                )
+
+            model_versions = unit_of_work.self_model_versions.list_versions(agent_id=agent_id)
+            attribute_versions = unit_of_work.capability_self_attributes.list_versions(
+                agent_id=agent_id,
+                capability_key=capability_key,
+            )
+            _validate_self_model_history(
+                agent_id=agent_id,
+                current=current_model,
+                versions=model_versions,
+            )
+            _validate_capability_attribute_history(
+                agent_id=agent_id,
+                capability_key=capability_key,
+                current=current_attribute,
+                versions=attribute_versions,
+                self_model_versions=model_versions,
+                expected_initial_estimated_success=(
+                    self._estimator.initial_state().estimated_success
+                ),
+            )
+            cursor_performance = _validate_metacognitive_state(
+                unit_of_work=unit_of_work,
+                current=current_meta,
+                estimator=self._estimator,
+            )
+            if current_meta.version == 1:
+                raise CapabilitySelfModelIntegrityError(
+                    "Une révision exige une preuve métacognitive réellement incorporée."
+                )
+            assessment = self._revision_policy.assess(
+                previous_estimated_success=current_attribute.estimated_success,
+                candidate_estimated_success=current_meta.state.estimated_success,
+            )
+
+            if not assessment.is_significant:
+                return CapabilitySelfModelRevisionResult(
+                    agent_id=agent_id,
+                    capability_key=capability_key,
+                    status=CapabilitySelfModelRevisionStatus.NO_REVISION,
+                    previous_estimated_success=current_attribute.estimated_success,
+                    resulting_estimated_success=current_attribute.estimated_success,
+                    previous_action=assessment.previous_action,
+                    resulting_action=assessment.previous_action,
+                    previous_self_model_version=current_model.version,
+                    resulting_self_model_version=current_model.version,
+                    previous_attribute_version=current_attribute.attribute_version,
+                    resulting_attribute_version=current_attribute.attribute_version,
+                    triggering_performance_id=None,
+                )
+
+            if cursor_performance is None:
+                raise CapabilitySelfModelIntegrityError(
+                    "Une révision significative exige une preuve métacognitive persistée."
+                )
+
+            now = self._clock.now()
+            new_model = SelfModelVersion(
+                id=self._identifiers.new("self-model-version"),
+                agent_id=agent_id,
+                version=current_model.version + 1,
+                previous_version_id=current_model.id,
+                created_at=now,
+            )
+            new_attribute = CapabilitySelfAttribute(
+                id=self._identifiers.new("capability-self-attribute"),
+                agent_id=agent_id,
+                capability_key=capability_key,
+                estimated_success=current_meta.state.estimated_success,
+                self_model_version_id=new_model.id,
+                attribute_version=current_attribute.attribute_version + 1,
+                previous_attribute_id=current_attribute.id,
+                created_at=now,
+            )
+            event = JournalEvent(
+                id=self._identifiers.new("event"),
+                agent_id=agent_id,
+                cycle_id=cursor_performance.cycle_id,
+                event_type=EventType.CAPABILITY_SELF_ATTRIBUTE_REVISED,
+                target_entity_type=CAPABILITY_SELF_ATTRIBUTE_TARGET_TYPE,
+                target_entity_id=new_attribute.id,
+                occurred_at=now,
+                reason=CAPABILITY_SELF_MODEL_REVISION_REASON,
+                new_value={
+                    "capability_key": capability_key,
+                    "previous_estimated_success": current_attribute.estimated_success,
+                    "resulting_estimated_success": new_attribute.estimated_success,
+                    "previous_action": assessment.previous_action.value,
+                    "resulting_action": assessment.resulting_action.value,
+                    "metacognitive_state_version": current_meta.version,
+                    "evidence_through_performance_id": cursor_performance.id,
+                    "evidence_through_sequence_index": cursor_performance.sequence_index,
+                    "evidence_source_type": cursor_performance.source_type.value,
+                    "source_type": SourceType.INTERNAL_STATE.value,
+                    "self_model_version": new_model.version,
+                    "attribute_version": new_attribute.attribute_version,
+                    "reason": CAPABILITY_SELF_MODEL_REVISION_REASON,
+                },
+            )
+            result = CapabilitySelfModelRevisionResult(
+                agent_id=agent_id,
+                capability_key=capability_key,
+                status=CapabilitySelfModelRevisionStatus.REVISED,
+                previous_estimated_success=current_attribute.estimated_success,
+                resulting_estimated_success=new_attribute.estimated_success,
+                previous_action=assessment.previous_action,
+                resulting_action=assessment.resulting_action,
+                previous_self_model_version=current_model.version,
+                resulting_self_model_version=new_model.version,
+                previous_attribute_version=current_attribute.attribute_version,
+                resulting_attribute_version=new_attribute.attribute_version,
+                triggering_performance_id=cursor_performance.id,
+            )
+
+            unit_of_work.self_model_versions.add(new_model)
+            unit_of_work.capability_self_attributes.add(new_attribute)
+            unit_of_work.journal.append(event)
+            unit_of_work.commit()
+            return result
