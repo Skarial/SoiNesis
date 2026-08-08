@@ -27,6 +27,7 @@ def build_observation(
         agent_id=agent_id,
         trial_id=f"trial-{identifier}",
         cycle_id=f"cycle-{identifier}",
+        sequence_index=int(identifier),
         capability_key=capability_key,
         intrinsic_success=intrinsic_success,
         observed_at=datetime(2026, 8, 8, tzinfo=UTC),
@@ -103,6 +104,9 @@ def test_self_attribute_provider_uses_only_the_consolidated_attribute() -> None:
         agent_id="agent-1",
         capability_key="GAMMA",
         estimated_success=0.73,
+        self_model_version_id="self-model-version-1",
+        attribute_version=1,
+        created_at=datetime(2026, 8, 8, tzinfo=UTC),
     )
 
     estimate = provider.estimate(attribute=attribute)

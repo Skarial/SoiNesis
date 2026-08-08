@@ -57,6 +57,17 @@ def test_replay_is_exactly_equivalent_to_successive_updates() -> None:
     assert estimator.replay(history) == successive_state
 
 
+def test_replay_depends_on_causal_history_order_with_decay() -> None:
+    estimator = DecayedBetaEstimator(lambda_=0.5)
+
+    recent_failure = estimator.replay((True, False))
+    recent_success = estimator.replay((False, True))
+
+    assert (recent_failure.alpha, recent_failure.beta) == (3.5, 3.0)
+    assert (recent_success.alpha, recent_success.beta) == (4.0, 2.5)
+    assert recent_success.estimated_success > recent_failure.estimated_success
+
+
 def test_replay_does_not_mutate_the_supplied_history() -> None:
     estimator = DecayedBetaEstimator(lambda_=0.92)
     history = [True, False, True]
