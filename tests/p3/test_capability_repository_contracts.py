@@ -1,6 +1,8 @@
 import inspect
 from datetime import UTC, datetime
 
+import pytest
+
 from soinesis.domain.capabilities import (
     CapabilityHistoryBoundary,
     CapabilityPerformanceObservation,
@@ -24,6 +26,12 @@ class InMemoryCapabilityPerformanceContractProbe:
         self._observations: list[CapabilityPerformanceObservation] = []
 
     def add(self, observation: CapabilityPerformanceObservation) -> None:
+        if any(
+            persisted.agent_id == observation.agent_id
+            and persisted.sequence_index >= observation.sequence_index
+            for persisted in self._observations
+        ):
+            raise ValueError("La chronologie publique de l'agent doit être strictement croissante.")
         self._observations.append(observation)
 
     def get(self, observation_id: str) -> CapabilityPerformanceObservation | None:
@@ -86,14 +94,13 @@ def build_observation(
 def test_performance_history_contract_excludes_current_future_and_other_scopes() -> None:
     repository: CapabilityPerformanceRepository = InMemoryCapabilityPerformanceContractProbe()
     observations = (
-        build_observation(identifier="future", sequence_index=4),
-        build_observation(identifier="past-1-b", sequence_index=1, minute=1),
-        build_observation(identifier="other-agent", sequence_index=0, agent_id="agent-2"),
-        build_observation(identifier="past-2", sequence_index=2, minute=2),
-        build_observation(identifier="current", sequence_index=3, intrinsic_success=False),
-        build_observation(identifier="past-1-a", sequence_index=1, minute=1),
-        build_observation(identifier="other-capability", sequence_index=0, capability_key="BETA"),
         build_observation(identifier="past-0", sequence_index=0, minute=2),
+        build_observation(identifier="other-agent", sequence_index=0, agent_id="agent-2"),
+        build_observation(identifier="past-1", sequence_index=1, minute=1),
+        build_observation(identifier="other-capability", sequence_index=2, capability_key="BETA"),
+        build_observation(identifier="past-3", sequence_index=3, minute=2),
+        build_observation(identifier="current", sequence_index=4, intrinsic_success=False),
+        build_observation(identifier="future", sequence_index=5),
     )
     for observation in observations:
         repository.add(observation)
@@ -103,7 +110,7 @@ def test_performance_history_contract_excludes_current_future_and_other_scopes()
         capability_key="ALPHA",
         trial_id="trial-current",
         cycle_id="cycle-current",
-        sequence_index=3,
+        sequence_index=4,
     )
 
     first_read = repository.list_before(boundary=boundary)
@@ -111,14 +118,40 @@ def test_performance_history_contract_excludes_current_future_and_other_scopes()
 
     assert [observation.id for observation in first_read] == [
         "past-0",
-        "past-1-a",
-        "past-1-b",
-        "past-2",
+        "past-1",
+        "past-3",
     ]
     assert second_read == first_read
     assert all(observation.agent_id == boundary.agent_id for observation in first_read)
     assert all(observation.capability_key == boundary.capability_key for observation in first_read)
     assert all(observation.sequence_index < boundary.sequence_index for observation in first_read)
+
+
+def test_performance_add_contract_is_monotonic_globally_per_agent() -> None:
+    repository: CapabilityPerformanceRepository = InMemoryCapabilityPerformanceContractProbe()
+    first = build_observation(identifier="agent-1-alpha-0", sequence_index=0)
+    third = build_observation(
+        identifier="agent-1-beta-2",
+        sequence_index=2,
+        capability_key="BETA",
+    )
+    late = build_observation(identifier="agent-1-alpha-1", sequence_index=1)
+    other_agent = build_observation(
+        identifier="agent-2-alpha-0",
+        sequence_index=0,
+        agent_id="agent-2",
+    )
+
+    repository.add(first)
+    repository.add(third)
+    with pytest.raises(ValueError, match="strictement croissante"):
+        repository.add(late)
+    repository.add(other_agent)
+
+    assert repository.get(first.id) == first
+    assert repository.get(third.id) == third
+    assert repository.get(late.id) is None
+    assert repository.get(other_agent.id) == other_agent
 
 
 def test_performance_history_port_exposes_only_a_nominal_causal_boundary() -> None:

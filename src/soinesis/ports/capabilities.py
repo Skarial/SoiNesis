@@ -21,7 +21,14 @@ class CapabilityPerformanceRepository(Protocol):
     identifiant de dataset OFFICIAL. Ces informations n'appartiennent jamais à ce port.
     """
 
-    def add(self, observation: CapabilityPerformanceObservation) -> None: ...
+    def add(self, observation: CapabilityPerformanceObservation) -> None:
+        """Ajouter une preuve à la fin de la chronologie publique de son agent.
+
+        ``sequence_index`` doit être strictement supérieur à tous les indices déjà
+        persistés pour le même agent, toutes capacités confondues. Chaque agent possède
+        sa propre chronologie indépendante.
+        """
+        ...
 
     def get(self, observation_id: str) -> CapabilityPerformanceObservation | None:
         """Relire une preuve persistée exacte sans accepter un objet arbitraire en mémoire."""

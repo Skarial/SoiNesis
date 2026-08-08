@@ -51,8 +51,10 @@ def initialize_synthetic_capability_v1(
     with database.connect() as connection:
         connection.execute("BEGIN IMMEDIATE")
         connection.execute(
-            "DELETE FROM capability_schema_migrations WHERE version = ?",
-            (CAPABILITY_SCHEMA_VERSION,),
+            "DELETE FROM capability_schema_migrations WHERE version > 1",
+        )
+        connection.execute(
+            "DROP TRIGGER IF EXISTS capability_performances_require_increasing_sequence"
         )
         connection.execute(
             "ALTER TABLE metacognitive_states DROP COLUMN last_processed_sequence_index"
@@ -86,6 +88,17 @@ def initialize_synthetic_capability_v1(
             )
 
 
+def initialize_synthetic_capability_v2(database: SQLiteDatabase) -> None:
+    database.initialize_capability_schema()
+    with database.connect() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute(
+            "DELETE FROM capability_schema_migrations WHERE version = ?",
+            (CAPABILITY_SCHEMA_VERSION,),
+        )
+        connection.execute("DROP TRIGGER capability_performances_require_increasing_sequence")
+
+
 def test_capability_migration_creates_a_fresh_schema_without_private_columns(
     tmp_path: Path,
 ) -> None:
@@ -99,8 +112,8 @@ def test_capability_migration_creates_a_fresh_schema_without_private_columns(
         cognitive_columns = {table: column_names(connection, table) for table in CAPABILITY_TABLES}
         applied_versions = migration_versions(connection)
 
-    assert CAPABILITY_SCHEMA_VERSION == 2
-    assert applied_versions == [1, 2]
+    assert CAPABILITY_SCHEMA_VERSION == 3
+    assert applied_versions == [1, 2, 3]
     assert tables >= CAPABILITY_TABLES
     assert "capability_schema_migrations" in tables
     assert performance_columns == {
@@ -188,7 +201,90 @@ def test_capability_migration_upgrades_a_synthetic_v1_prior_without_loss(
     assert float(stored_state["decay_lambda"]) == 0.9
     assert stored_state["last_processed_performance_id"] is None
     assert stored_state["last_processed_sequence_index"] is None
-    assert applied_versions == [1, 2]
+    assert applied_versions == [1, 2, 3]
+
+
+def test_capability_v3_migration_preserves_v2_data_and_enforces_sequence(
+    tmp_path: Path,
+) -> None:
+    database = SQLiteDatabase(tmp_path / "capability-v2-to-v3.db")
+    initialize_synthetic_capability_v2(database)
+    with database.connect() as connection:
+        connection.executemany(
+            """
+            INSERT INTO capability_performances (
+                id, agent_id, trial_id, cycle_id, sequence_index,
+                capability_key, intrinsic_success, observed_at, source_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (
+                    "performance-0",
+                    "agent-1",
+                    "trial-0",
+                    "cycle-0",
+                    0,
+                    "ALPHA",
+                    1,
+                    "2026-08-08T00:00:00+00:00",
+                    "DIRECT_ENVIRONMENT",
+                ),
+                (
+                    "performance-2",
+                    "agent-1",
+                    "trial-2",
+                    "cycle-2",
+                    2,
+                    "BETA",
+                    0,
+                    "2026-08-08T00:02:00+00:00",
+                    "DIRECT_ENVIRONMENT",
+                ),
+            ),
+        )
+
+    database.initialize_capability_schema()
+
+    with database.connect() as connection:
+        applied_versions = migration_versions(connection)
+        trigger = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'trigger'
+              AND name = 'capability_performances_require_increasing_sequence'
+            """
+        ).fetchone()
+        with pytest.raises(sqlite3.IntegrityError, match="strictement supérieur"):
+            connection.execute(
+                """
+                INSERT INTO capability_performances (
+                    id, agent_id, trial_id, cycle_id, sequence_index,
+                    capability_key, intrinsic_success, observed_at, source_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "performance-1-late",
+                    "agent-1",
+                    "trial-1-late",
+                    "cycle-1-late",
+                    1,
+                    "ALPHA",
+                    1,
+                    "2026-08-08T00:01:00+00:00",
+                    "DIRECT_ENVIRONMENT",
+                ),
+            )
+        stored_ids = [
+            str(row["id"])
+            for row in connection.execute(
+                "SELECT id FROM capability_performances ORDER BY sequence_index"
+            ).fetchall()
+        ]
+
+    assert applied_versions == [1, 2, 3]
+    assert trigger is not None
+    assert str(trigger["name"]) == "capability_performances_require_increasing_sequence"
+    assert stored_ids == ["performance-0", "performance-2"]
 
 
 def test_capability_v2_migration_rolls_back_a_late_alter_failure(
@@ -281,7 +377,7 @@ def test_capability_migration_is_idempotent_on_reopen(tmp_path: Path) -> None:
         applied_versions = migration_versions(connection)
 
     assert int(migration_count) == 1
-    assert applied_versions == [1, 2]
+    assert applied_versions == [1, 2, 3]
     assert int(performance_count) == 1
 
 

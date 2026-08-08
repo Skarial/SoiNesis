@@ -14,6 +14,7 @@ from soinesis.application.capabilities import (
     MetacognitiveLambdaMismatchError,
     MetacognitiveStateIntegrityError,
     MetacognitiveUpdateStatus,
+    RawHistoryCapabilityEstimateProvider,
 )
 from soinesis.domain.capabilities import (
     CapabilityPerformanceObservation,
@@ -298,7 +299,7 @@ def test_unauthorized_provenance_between_valid_proofs_is_not_a_causal_gap(
     unauthorized = build_performance(
         identifier="performance-2",
         sequence_index=1,
-        intrinsic_success=True,
+        intrinsic_success=False,
         source_type=SourceType.IMAGINATION,
     )
     second = build_performance(
@@ -317,10 +318,16 @@ def test_unauthorized_provenance_between_valid_proofs_is_not_a_causal_gap(
     result = service.process(performance_id=second.id)
 
     current = get_current_state(factory)
+    raw_history_estimate = RawHistoryCapabilityEstimateProvider(estimator=estimator).estimate(
+        agent_id="agent-1",
+        capability_key="ALPHA",
+        history=(first, unauthorized, second),
+    )
     assert result.status is MetacognitiveUpdateStatus.APPLIED
     assert current is not None
     assert current.version == 3
     assert current.state == estimator.replay((True, False))
+    assert raw_history_estimate.estimated_success == current.state.estimated_success
     assert current.last_processed_performance_id == second.id
     assert current.last_processed_sequence_index == second.sequence_index
     with factory() as unit_of_work:

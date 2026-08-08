@@ -7,8 +7,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final
 
-CAPABILITY_SCHEMA_VERSION: Final = 2
+CAPABILITY_SCHEMA_VERSION: Final = 3
 CAPABILITY_SCHEMA_MIGRATION_NAME: Final = "metacognitive_proof_cursor"
+CAPABILITY_SEQUENCE_MIGRATION_NAME: Final = "monotonic_agent_performance_sequence"
 
 
 @dataclass(frozen=True)
@@ -275,6 +276,25 @@ _CAPABILITY_SCHEMA_V2_STATEMENTS: Final[tuple[str, ...]] = (
     """,
 )
 
+_CAPABILITY_SCHEMA_V3_STATEMENTS: Final[tuple[str, ...]] = (
+    """
+    CREATE TRIGGER capability_performances_require_increasing_sequence
+    BEFORE INSERT ON capability_performances
+    WHEN EXISTS (
+        SELECT 1
+        FROM capability_performances
+        WHERE agent_id = NEW.agent_id
+          AND sequence_index >= NEW.sequence_index
+    )
+    BEGIN
+        SELECT RAISE(
+            ABORT,
+            'Le sequence_index doit être strictement supérieur au dernier index de l''agent'
+        );
+    END
+    """,
+)
+
 
 def _refuse_ambiguous_metacognitive_cursor_backfill(
     connection: sqlite3.Connection,
@@ -301,6 +321,11 @@ _CAPABILITY_SCHEMA_MIGRATIONS: Final[tuple[_CapabilitySchemaMigration, ...]] = (
         name=CAPABILITY_SCHEMA_MIGRATION_NAME,
         statements=_CAPABILITY_SCHEMA_V2_STATEMENTS,
         preflight=_refuse_ambiguous_metacognitive_cursor_backfill,
+    ),
+    _CapabilitySchemaMigration(
+        version=3,
+        name=CAPABILITY_SEQUENCE_MIGRATION_NAME,
+        statements=_CAPABILITY_SCHEMA_V3_STATEMENTS,
     ),
 )
 

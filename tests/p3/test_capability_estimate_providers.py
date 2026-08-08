@@ -1,7 +1,11 @@
 import inspect
 from datetime import UTC, datetime
 
+import pytest
+
 from soinesis.application.capabilities import (
+    CapabilityPerformanceProvenanceError,
+    CapabilityPerformanceProvenancePolicy,
     DecayedBetaEstimator,
     FixedCapabilityEstimateProvider,
     RawHistoryCapabilityEstimateProvider,
@@ -21,6 +25,7 @@ def build_observation(
     agent_id: str = "agent-1",
     capability_key: str = "ALPHA",
     intrinsic_success: bool,
+    source_type: SourceType = SourceType.DIRECT_ENVIRONMENT,
 ) -> CapabilityPerformanceObservation:
     return CapabilityPerformanceObservation(
         id=identifier,
@@ -31,7 +36,7 @@ def build_observation(
         capability_key=capability_key,
         intrinsic_success=intrinsic_success,
         observed_at=datetime(2026, 8, 8, tzinfo=UTC),
-        source_type=SourceType.DIRECT_ENVIRONMENT,
+        source_type=source_type,
     )
 
 
@@ -95,6 +100,63 @@ def test_raw_history_provider_reconstructs_without_persisting_state() -> None:
     assert repeated == first
     assert vars(provider) == initial_provider_state
     assert successful_history[0].intrinsic_success is True
+
+
+@pytest.mark.parametrize(
+    "source_type",
+    tuple(
+        source_type
+        for source_type in SourceType
+        if source_type is not SourceType.DIRECT_ENVIRONMENT
+    ),
+)
+def test_raw_history_provider_ignores_every_source_rejected_by_metacognition(
+    source_type: SourceType,
+) -> None:
+    estimator = DecayedBetaEstimator(lambda_=0.5)
+    provider = RawHistoryCapabilityEstimateProvider(estimator=estimator)
+    policy = CapabilityPerformanceProvenancePolicy()
+    direct = build_observation(identifier="1", intrinsic_success=True)
+    rejected = build_observation(
+        identifier="2",
+        intrinsic_success=False,
+        source_type=source_type,
+    )
+
+    estimate = provider.estimate(
+        agent_id="agent-1",
+        capability_key="ALPHA",
+        history=(direct, rejected),
+    )
+
+    with pytest.raises(CapabilityPerformanceProvenanceError):
+        policy.validate(rejected)
+    assert estimate.estimated_success == estimator.replay((True,)).estimated_success
+
+
+def test_raw_history_provider_preserves_the_order_of_admissible_proofs() -> None:
+    estimator = DecayedBetaEstimator(lambda_=0.5)
+    provider = RawHistoryCapabilityEstimateProvider(estimator=estimator)
+    history = (
+        build_observation(identifier="1", intrinsic_success=True),
+        build_observation(
+            identifier="2",
+            intrinsic_success=False,
+            source_type=SourceType.IMAGINATION,
+        ),
+        build_observation(identifier="3", intrinsic_success=False),
+    )
+
+    estimate = provider.estimate(
+        agent_id="agent-1",
+        capability_key="ALPHA",
+        history=history,
+    )
+    expected = estimator.replay((True, False))
+    reverse_order = estimator.replay((False, True))
+
+    assert estimate.estimated_success == expected.estimated_success
+    assert estimate.estimated_success != reverse_order.estimated_success
 
 
 def test_self_attribute_provider_uses_only_the_consolidated_attribute() -> None:

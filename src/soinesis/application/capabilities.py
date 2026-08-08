@@ -72,6 +72,13 @@ class MetacognitiveStateIntegrityError(ValueError):
     """Refuser un prior ou un curseur persistant incohérent avec les preuves."""
 
 
+def is_admissible_self_performance(
+    observation: CapabilityPerformanceObservation,
+) -> bool:
+    """Indiquer si une observation constitue une preuve de performance propre."""
+    return observation.source_type is ALLOWED_SELF_PERFORMANCE_SOURCE
+
+
 class CapabilityPerformanceProvenancePolicy:
     """Vérifier la provenance déclarée des preuves admises pour l'apprentissage.
 
@@ -82,7 +89,7 @@ class CapabilityPerformanceProvenancePolicy:
 
     def validate(self, observation: CapabilityPerformanceObservation) -> None:
         """Refuser toute observation qui ne provient pas de la voie autorisée."""
-        if observation.source_type is not ALLOWED_SELF_PERFORMANCE_SOURCE:
+        if not is_admissible_self_performance(observation):
             raise CapabilityPerformanceProvenanceError(
                 "Seule une performance DIRECT_ENVIRONMENT peut alimenter la métacognition."
             )
@@ -198,7 +205,9 @@ class RawHistoryCapabilityEstimateProvider:
         relevant_history = tuple(
             observation
             for observation in history
-            if observation.agent_id == agent_id and observation.capability_key == capability_key
+            if observation.agent_id == agent_id
+            and observation.capability_key == capability_key
+            and is_admissible_self_performance(observation)
         )
         state = self._estimator.replay(
             observation.intrinsic_success for observation in relevant_history
@@ -301,7 +310,7 @@ class MetacognitiveCapabilityUpdateService:
                 )
             )
             has_unprocessed_prior = any(
-                observation.source_type is ALLOWED_SELF_PERFORMANCE_SOURCE
+                is_admissible_self_performance(observation)
                 and (
                     last_sequence_index is None or observation.sequence_index > last_sequence_index
                 )
@@ -384,7 +393,7 @@ class MetacognitiveCapabilityUpdateService:
             or cursor_performance.agent_id != current.agent_id
             or cursor_performance.capability_key != current.capability_key
             or cursor_performance.sequence_index != cursor_sequence_index
-            or cursor_performance.source_type is not ALLOWED_SELF_PERFORMANCE_SOURCE
+            or not is_admissible_self_performance(cursor_performance)
         ):
             raise MetacognitiveStateIntegrityError(
                 "Le curseur métacognitif ne correspond pas à une preuve propre persistée."

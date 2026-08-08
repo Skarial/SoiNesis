@@ -165,6 +165,81 @@ def test_performance_rejects_ambiguous_duplicates(tmp_path: Path, conflict: str)
         unit_of_work.capability_performances.add(conflicting)
 
 
+def test_performance_sequence_is_global_per_agent_and_agents_are_independent(
+    tmp_path: Path,
+) -> None:
+    database = build_database(tmp_path / "performance-sequence-scope.db")
+    factory = SQLiteCapabilityUnitOfWorkFactory(database)
+    observations = (
+        build_observation(identifier="agent-1-alpha-0", sequence_index=0),
+        build_observation(
+            identifier="agent-1-beta-1",
+            sequence_index=1,
+            capability_key="BETA",
+        ),
+        build_observation(identifier="agent-1-alpha-2", sequence_index=2),
+        build_observation(
+            identifier="agent-2-alpha-0",
+            sequence_index=0,
+            agent_id="agent-2",
+        ),
+    )
+
+    with factory() as unit_of_work:
+        for observation in observations:
+            unit_of_work.capability_performances.add(observation)
+        unit_of_work.commit()
+
+    with factory() as unit_of_work:
+        persisted = [
+            unit_of_work.capability_performances.get(observation.id) for observation in observations
+        ]
+
+    assert persisted == list(observations)
+
+
+def test_performance_rejects_retroactive_insertion_even_after_reopen(tmp_path: Path) -> None:
+    database_path = tmp_path / "performance-retroactive.db"
+    database = build_database(database_path)
+    factory = SQLiteCapabilityUnitOfWorkFactory(database)
+    first = build_observation(identifier="performance-0", sequence_index=0)
+    latest = build_observation(identifier="performance-2", sequence_index=2)
+    late = build_observation(
+        identifier="performance-1",
+        sequence_index=1,
+        capability_key="BETA",
+    )
+
+    with factory() as unit_of_work:
+        unit_of_work.capability_performances.add(first)
+        unit_of_work.capability_performances.add(latest)
+        unit_of_work.commit()
+
+    with pytest.raises(sqlite3.IntegrityError, match="strictement supérieur"), factory() as uow:
+        uow.capability_performances.add(late)
+
+    with factory() as unit_of_work:
+        assert unit_of_work.capability_performances.get(first.id) == first
+        assert unit_of_work.capability_performances.get(latest.id) == latest
+        assert unit_of_work.capability_performances.get(late.id) is None
+
+    reopened_database = SQLiteDatabase(database_path)
+    reopened_database.initialize_capability_schema()
+    reopened_factory = SQLiteCapabilityUnitOfWorkFactory(reopened_database)
+    late_after_reopen = late.model_copy(update={"id": "performance-1-after-reopen"})
+    with (
+        pytest.raises(sqlite3.IntegrityError, match="strictement supérieur"),
+        reopened_factory() as unit_of_work,
+    ):
+        unit_of_work.capability_performances.add(late_after_reopen)
+
+    with reopened_factory() as unit_of_work:
+        assert unit_of_work.capability_performances.get(first.id) == first
+        assert unit_of_work.capability_performances.get(latest.id) == latest
+        assert unit_of_work.capability_performances.get(late.id) is None
+        assert unit_of_work.capability_performances.get(late_after_reopen.id) is None
+
+
 def test_performance_is_immutable_in_sqlite(tmp_path: Path) -> None:
     database = build_database(tmp_path / "performance-immutable.db")
     factory = SQLiteCapabilityUnitOfWorkFactory(database)
@@ -195,16 +270,16 @@ def test_list_before_filters_scope_and_excludes_current_and_future(tmp_path: Pat
     database = build_database(tmp_path / "performance-history.db")
     factory = SQLiteCapabilityUnitOfWorkFactory(database)
     observations = (
-        build_observation(identifier="future", sequence_index=6),
-        build_observation(identifier="past-3", sequence_index=3, minute=3),
+        build_observation(identifier="past-0", sequence_index=0, minute=5),
         build_observation(identifier="other-agent", sequence_index=2, agent_id="agent-2"),
         build_observation(
             identifier="other-capability",
             sequence_index=1,
             capability_key="BETA",
         ),
+        build_observation(identifier="past-3", sequence_index=3, minute=3),
         build_observation(identifier="current", sequence_index=5),
-        build_observation(identifier="past-0", sequence_index=0, minute=5),
+        build_observation(identifier="future", sequence_index=6),
     )
     with factory() as unit_of_work:
         for observation in observations:
