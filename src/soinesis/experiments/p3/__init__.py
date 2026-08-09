@@ -54,6 +54,17 @@ from soinesis.experiments.p3.provenance import (
 from soinesis.experiments.p3.provenance_sqlite import (
     SQLiteExperimentalExecutionGenerationProvenanceRepository,
 )
+from soinesis.experiments.p3.replication_manifest import (
+    ExperimentalReplicationCycleContext,
+    ExperimentalReplicationExecutionManifest,
+    ExperimentalReplicationManifestError,
+    ExperimentalReplicationManifestIntegrityError,
+    ExperimentalReplicationManifestRepository,
+    ExperimentalReplicationManifestService,
+)
+from soinesis.experiments.p3.replication_manifest_sqlite import (
+    SQLiteExperimentalReplicationManifestRepository,
+)
 from soinesis.experiments.p3.runner import (
     ExperimentalCycleRunner,
     ExperimentalCycleRunnerError,
@@ -100,6 +111,12 @@ __all__ = (
     "ExperimentalPlanGenerationIntegrityError",
     "ExperimentalPlanGenerationProvenance",
     "ExperimentalPlanPerformanceMismatchError",
+    "ExperimentalReplicationCycleContext",
+    "ExperimentalReplicationExecutionManifest",
+    "ExperimentalReplicationManifestError",
+    "ExperimentalReplicationManifestIntegrityError",
+    "ExperimentalReplicationManifestRepository",
+    "ExperimentalReplicationManifestService",
     "ExperimentalReplicationPlan",
     "ExperimentalReplicationPlanGenerator",
     "ExperimentalReplicationPlanIdentity",
@@ -111,5 +128,6 @@ __all__ = (
     "SQLiteExperimentalCycleCheckpointRepository",
     "SQLiteExperimentalExecutionGenerationProvenanceRepository",
     "SQLiteExperimentalExecutionPlanBindingRepository",
+    "SQLiteExperimentalReplicationManifestRepository",
     "UnknownExperimentalCapabilityError",
 )
