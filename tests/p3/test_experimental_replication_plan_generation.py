@@ -1,5 +1,6 @@
 import ast
 import inspect
+import sys
 from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -18,6 +19,9 @@ from soinesis.domain.capabilities import (
 from soinesis.domain.models import JournalEvent
 from soinesis.experiments.p3 import (
     ExperimentalCapabilitySchedule,
+    ExperimentalPlanGenerationEnvironmentError,
+    ExperimentalPlanGenerationIntegrityError,
+    ExperimentalPlanGenerationProvenance,
     ExperimentalReplicationPlan,
     ExperimentalReplicationPlanGenerator,
 )
@@ -86,6 +90,8 @@ def test_generator_requires_a_strict_integer_seed(invalid_seed: object) -> None:
 
     with pytest.raises(TypeError):
         generator.generate(seed=invalid_seed)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        generator.generate_with_provenance(seed=invalid_seed)  # type: ignore[arg-type]
 
 
 def test_same_instance_and_seed_generate_identical_behavior_on_all_cycles() -> None:
@@ -167,6 +173,84 @@ def test_generator_version_and_three_private_substreams_are_explicit() -> None:
     assert private_module_members["_CORRECTION_SUBSTREAM"] == "u-correction"
 
 
+def test_generate_and_generate_with_provenance_share_the_same_canonical_plan() -> None:
+    generator = ExperimentalReplicationPlanGenerator()
+
+    plain = generator.generate(seed=12345)
+    generated = generator.generate_with_provenance(seed=12345)
+
+    assert generated.plan.identity() == plain.identity()
+    assert generated.provenance.plan_identity == generated.plan.identity()
+    assert generated.plan.identity().fingerprint == (
+        "57d70c44a697a732ba76b919beef54309d30bd11c9debd01244a1dfc8e4f0b96"
+    )
+
+
+def test_equal_seed_and_runtime_produce_equal_plan_identity_and_provenance() -> None:
+    generator = ExperimentalReplicationPlanGenerator()
+
+    first = generator.generate_with_provenance(seed=12345)
+    second = generator.generate_with_provenance(seed=12345)
+
+    assert first.plan.identity() == second.plan.identity()
+    assert first.provenance == second.provenance
+    assert first.provenance.scheme == "p3-plan-generation-provenance-v1"
+    assert first.provenance.generator_version == "p3-dev-plan-v2"
+    assert first.provenance.python_implementation == sys.implementation.name
+    assert first.provenance.python_version == (
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
+
+
+def test_reproduce_regenerates_and_verifies_the_exact_plan_identity() -> None:
+    generator = ExperimentalReplicationPlanGenerator()
+    generated = generator.generate_with_provenance(seed=12345)
+
+    reproduced = generator.reproduce(provenance=generated.provenance)
+
+    assert reproduced.identity() == generated.plan.identity()
+
+
+def test_reproduce_rejects_a_changed_seed_with_the_original_identity() -> None:
+    generator = ExperimentalReplicationPlanGenerator()
+    original = generator.generate_with_provenance(seed=12345).provenance
+    inconsistent = original.model_copy(update={"seed": 12346})
+
+    with pytest.raises(ExperimentalPlanGenerationIntegrityError):
+        generator.reproduce(provenance=inconsistent)
+
+
+@pytest.mark.parametrize(
+    ("changed_field", "changed_value"),
+    (
+        ("generator_version", "p3-dev-plan-v1"),
+        ("python_implementation", "pypy"),
+        ("python_version", "0.0.1"),
+    ),
+)
+def test_historical_provenance_is_loadable_but_reproduction_rejects_its_environment(
+    changed_field: str,
+    changed_value: str,
+) -> None:
+    generator = ExperimentalReplicationPlanGenerator()
+    original = generator.generate_with_provenance(seed=12345).provenance
+    incompatible = ExperimentalPlanGenerationProvenance.model_validate(
+        {**original.model_dump(), changed_field: changed_value}
+    )
+
+    with pytest.raises(ExperimentalPlanGenerationEnvironmentError):
+        generator.reproduce(provenance=incompatible)
+
+
+def test_reproduce_defensively_rejects_an_unknown_provenance_scheme() -> None:
+    generator = ExperimentalReplicationPlanGenerator()
+    original = generator.generate_with_provenance(seed=12345).provenance
+    unknown_scheme = original.model_copy(update={"scheme": "unknown-scheme"})
+
+    with pytest.raises(ExperimentalPlanGenerationEnvironmentError):
+        generator.reproduce(provenance=unknown_scheme)
+
+
 def test_generator_creates_exactly_180_values_for_each_latent_stream() -> None:
     plan = ExperimentalReplicationPlanGenerator().generate(seed=12345)
 
@@ -196,15 +280,17 @@ def test_generated_plan_attempt_uses_the_generated_capability_and_latent() -> No
         assert type(observation) is CapabilityPerformanceObservation
 
 
-def test_generator_has_no_evolving_instance_state_and_only_exposes_generate() -> None:
+def test_generator_has_no_evolving_instance_state_and_only_exposes_generation_apis() -> None:
     generator = ExperimentalReplicationPlanGenerator()
     public_members = {
         name for name in ExperimentalReplicationPlanGenerator.__dict__ if not name.startswith("_")
     }
 
     assert vars(generator) == {}
-    assert public_members == {"generate"}
+    assert public_members == {"generate", "generate_with_provenance", "reproduce"}
     assert tuple(inspect.signature(generator.generate).parameters) == ("seed",)
+    assert tuple(inspect.signature(generator.generate_with_provenance).parameters) == ("seed",)
+    assert tuple(inspect.signature(generator.reproduce).parameters) == ("provenance",)
 
 
 def test_seed_and_private_plan_data_do_not_enter_cognitive_models() -> None:

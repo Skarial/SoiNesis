@@ -39,6 +39,21 @@ from soinesis.experiments.p3.plan import (
     ExperimentalReplicationPlanIdentity,
     InvalidExperimentalReplicationPlanError,
 )
+from soinesis.experiments.p3.provenance import (
+    ExperimentalExecutionGenerationProvenance,
+    ExperimentalExecutionGenerationProvenanceError,
+    ExperimentalExecutionGenerationProvenanceIntegrityError,
+    ExperimentalExecutionGenerationProvenanceRepository,
+    ExperimentalExecutionGenerationProvenanceService,
+    ExperimentalGeneratedReplicationPlan,
+    ExperimentalPlanGenerationEnvironmentError,
+    ExperimentalPlanGenerationError,
+    ExperimentalPlanGenerationIntegrityError,
+    ExperimentalPlanGenerationProvenance,
+)
+from soinesis.experiments.p3.provenance_sqlite import (
+    SQLiteExperimentalExecutionGenerationProvenanceRepository,
+)
 from soinesis.experiments.p3.runner import (
     ExperimentalCycleRunner,
     ExperimentalCycleRunnerError,
@@ -69,11 +84,21 @@ __all__ = (
     "ExperimentalCycleRunnerIntegrityError",
     "ExperimentalCycleStartContext",
     "ExperimentalCycleStartContextRequiredError",
+    "ExperimentalExecutionGenerationProvenance",
+    "ExperimentalExecutionGenerationProvenanceError",
+    "ExperimentalExecutionGenerationProvenanceIntegrityError",
+    "ExperimentalExecutionGenerationProvenanceRepository",
+    "ExperimentalExecutionGenerationProvenanceService",
     "ExperimentalExecutionPlanBinding",
     "ExperimentalExecutionPlanBindingError",
     "ExperimentalExecutionPlanBindingIntegrityError",
     "ExperimentalExecutionPlanBindingRepository",
     "ExperimentalExecutionPlanBindingService",
+    "ExperimentalGeneratedReplicationPlan",
+    "ExperimentalPlanGenerationEnvironmentError",
+    "ExperimentalPlanGenerationError",
+    "ExperimentalPlanGenerationIntegrityError",
+    "ExperimentalPlanGenerationProvenance",
     "ExperimentalPlanPerformanceMismatchError",
     "ExperimentalReplicationPlan",
     "ExperimentalReplicationPlanGenerator",
@@ -84,6 +109,7 @@ __all__ = (
     "InvalidExperimentalCapabilityScheduleError",
     "InvalidExperimentalReplicationPlanError",
     "SQLiteExperimentalCycleCheckpointRepository",
+    "SQLiteExperimentalExecutionGenerationProvenanceRepository",
     "SQLiteExperimentalExecutionPlanBindingRepository",
     "UnknownExperimentalCapabilityError",
 )
