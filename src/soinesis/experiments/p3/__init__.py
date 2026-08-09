@@ -4,6 +4,7 @@ from soinesis.experiments.p3.capability import (
     ExperimentalCapabilityModule,
     UnknownExperimentalCapabilityError,
 )
+from soinesis.experiments.p3.generation import ExperimentalReplicationPlanGenerator
 from soinesis.experiments.p3.plan import (
     ExperimentalReplicationPlan,
     InvalidExperimentalReplicationPlanError,
@@ -17,6 +18,7 @@ __all__ = (
     "ExperimentalCapabilityModule",
     "ExperimentalCapabilitySchedule",
     "ExperimentalReplicationPlan",
+    "ExperimentalReplicationPlanGenerator",
     "InvalidExperimentalCapabilityScheduleError",
     "InvalidExperimentalReplicationPlanError",
     "UnknownExperimentalCapabilityError",
