@@ -29,6 +29,12 @@ from soinesis.experiments.p3.condition_config import (
 from soinesis.experiments.p3.condition_config_sqlite import (
     SQLiteExperimentalExecutionConditionConfigurationRepository,
 )
+from soinesis.experiments.p3.condition_replication import (
+    ExperimentalConditionReplicationError,
+    ExperimentalConditionReplicationIntegrityError,
+    ExperimentalConditionReplicationRunner,
+    ExperimentalConditionReplicationRunResult,
+)
 from soinesis.experiments.p3.condition_runtime import (
     P3_PUBLIC_CAPABILITY_KEYS,
     ExperimentalAgentCognitiveState,
@@ -118,6 +124,10 @@ __all__ = (
     "ExperimentalConditionConfiguration",
     "ExperimentalConditionConfigurationError",
     "ExperimentalConditionConfigurationIntegrityError",
+    "ExperimentalConditionReplicationError",
+    "ExperimentalConditionReplicationIntegrityError",
+    "ExperimentalConditionReplicationRunResult",
+    "ExperimentalConditionReplicationRunner",
     "ExperimentalConditionRuntime",
     "ExperimentalConditionRuntimeComposer",
     "ExperimentalConditionRuntimeError",
