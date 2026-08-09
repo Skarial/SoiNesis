@@ -63,6 +63,16 @@ from soinesis.experiments.p3.outcome import (
     ExperimentalTrialOutcome,
     ExperimentalTrialOutcomeResolver,
 )
+from soinesis.experiments.p3.pairing import (
+    ExperimentalPairedConditionGroup,
+    ExperimentalPairedConditionGroupRepository,
+    ExperimentalPairedConditionGroupService,
+    ExperimentalPairingError,
+    ExperimentalPairingIntegrityError,
+)
+from soinesis.experiments.p3.pairing_sqlite import (
+    SQLiteExperimentalPairedConditionGroupRepository,
+)
 from soinesis.experiments.p3.plan import (
     ExperimentalPlanPerformanceMismatchError,
     ExperimentalReplicationPlan,
@@ -160,6 +170,11 @@ __all__ = (
     "ExperimentalExecutionPlanBindingRepository",
     "ExperimentalExecutionPlanBindingService",
     "ExperimentalGeneratedReplicationPlan",
+    "ExperimentalPairedConditionGroup",
+    "ExperimentalPairedConditionGroupRepository",
+    "ExperimentalPairedConditionGroupService",
+    "ExperimentalPairingError",
+    "ExperimentalPairingIntegrityError",
     "ExperimentalPlanGenerationEnvironmentError",
     "ExperimentalPlanGenerationError",
     "ExperimentalPlanGenerationIntegrityError",
@@ -188,6 +203,7 @@ __all__ = (
     "SQLiteExperimentalExecutionConditionConfigurationRepository",
     "SQLiteExperimentalExecutionGenerationProvenanceRepository",
     "SQLiteExperimentalExecutionPlanBindingRepository",
+    "SQLiteExperimentalPairedConditionGroupRepository",
     "SQLiteExperimentalReplicationManifestRepository",
     "UnknownExperimentalCapabilityError",
 )
