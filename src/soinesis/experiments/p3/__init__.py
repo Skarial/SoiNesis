@@ -5,6 +5,11 @@ from soinesis.experiments.p3.capability import (
     UnknownExperimentalCapabilityError,
 )
 from soinesis.experiments.p3.generation import ExperimentalReplicationPlanGenerator
+from soinesis.experiments.p3.outcome import (
+    ExperimentalTrialContextMismatchError,
+    ExperimentalTrialOutcome,
+    ExperimentalTrialOutcomeResolver,
+)
 from soinesis.experiments.p3.plan import (
     ExperimentalReplicationPlan,
     InvalidExperimentalReplicationPlanError,
@@ -19,6 +24,9 @@ __all__ = (
     "ExperimentalCapabilitySchedule",
     "ExperimentalReplicationPlan",
     "ExperimentalReplicationPlanGenerator",
+    "ExperimentalTrialContextMismatchError",
+    "ExperimentalTrialOutcome",
+    "ExperimentalTrialOutcomeResolver",
     "InvalidExperimentalCapabilityScheduleError",
     "InvalidExperimentalReplicationPlanError",
     "UnknownExperimentalCapabilityError",

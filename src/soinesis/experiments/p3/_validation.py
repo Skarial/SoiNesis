@@ -22,6 +22,14 @@ def validate_intrinsic_latent(value: float) -> float:
     return validated_value
 
 
+def validate_correction_latent(value: float) -> float:
+    """Valider le latent privé commun aux actions de correction."""
+    validated_value = as_strict_finite_float(value, parameter_name="u_correction")
+    if not 0.0 <= validated_value < 1.0:
+        raise ValueError("u_correction doit être compris entre 0 inclus et 1 exclu.")
+    return validated_value
+
+
 def as_strict_finite_float(value: float, *, parameter_name: str) -> float:
     """Refuser les booléens, NaN et infinis."""
     if isinstance(value, bool):
