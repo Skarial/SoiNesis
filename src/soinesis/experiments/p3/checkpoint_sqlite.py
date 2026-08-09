@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from typing import Final
 
 from soinesis.domain.capabilities import (
@@ -29,6 +30,7 @@ _CHECKPOINT_COLUMNS: Final = (
     "trial_id",
     "cycle_id",
     "capability_key",
+    "observed_at",
     "decision_agent_id",
     "decision_capability_key",
     "decision_estimated_success",
@@ -61,6 +63,7 @@ class SQLiteExperimentalCycleCheckpointRepository:
                     trial_id TEXT NOT NULL,
                     cycle_id TEXT NOT NULL,
                     capability_key TEXT NOT NULL,
+                    observed_at TEXT NOT NULL,
                     decision_agent_id TEXT NOT NULL,
                     decision_capability_key TEXT NOT NULL,
                     decision_estimated_success REAL NOT NULL CHECK (
@@ -117,6 +120,7 @@ class SQLiteExperimentalCycleCheckpointRepository:
                     AND NEW.trial_id IS OLD.trial_id
                     AND NEW.cycle_id IS OLD.cycle_id
                     AND NEW.capability_key IS OLD.capability_key
+                    AND NEW.observed_at IS OLD.observed_at
                     AND NEW.decision_agent_id IS OLD.decision_agent_id
                     AND NEW.decision_capability_key IS OLD.decision_capability_key
                     AND NEW.decision_estimated_success IS OLD.decision_estimated_success
@@ -265,12 +269,12 @@ class SQLiteExperimentalCycleCheckpointRepository:
             f"""
             INSERT INTO {_TABLE_NAME} (
                 execution_id, sequence_index, performance_id, agent_id,
-                trial_id, cycle_id, capability_key, decision_agent_id,
+                trial_id, cycle_id, capability_key, observed_at, decision_agent_id,
                 decision_capability_key, decision_estimated_success,
                 decision_estimate_source, decision_action,
                 decision_direct_utility, decision_verify_utility,
                 decision_help_utility, checkpoint_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 checkpoint.execution_id,
@@ -280,6 +284,7 @@ class SQLiteExperimentalCycleCheckpointRepository:
                 checkpoint.trial_id,
                 checkpoint.cycle_id,
                 checkpoint.capability_key,
+                checkpoint.observed_at.isoformat(),
                 decision.estimate.agent_id,
                 decision.estimate.capability_key,
                 decision.estimate.estimated_success,
@@ -328,6 +333,7 @@ class SQLiteExperimentalCycleCheckpointRepository:
             trial_id=str(row["trial_id"]),
             cycle_id=str(row["cycle_id"]),
             capability_key=str(row["capability_key"]),
+            observed_at=datetime.fromisoformat(str(row["observed_at"])),
             decision=decision,
             status=ExperimentalCycleCheckpointStatus(str(row["checkpoint_status"])),
         )

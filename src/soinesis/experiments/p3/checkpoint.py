@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
 
@@ -29,6 +30,7 @@ class ExperimentalCycleCheckpoint(BaseModel):
     trial_id: str = Field(min_length=1)
     cycle_id: str = Field(min_length=1)
     capability_key: str = Field(min_length=1)
+    observed_at: datetime
     decision: CapabilityDecision
     status: ExperimentalCycleCheckpointStatus
 
@@ -95,6 +97,7 @@ class ExperimentalCycleCheckpointService:
         trial_id: str,
         cycle_id: str,
         capability_key: str,
+        observed_at: datetime,
         decision: CapabilityDecision,
     ) -> ExperimentalCycleCheckpoint:
         """Figer le contexte pré-performance ou relire le checkpoint identique."""
@@ -106,6 +109,7 @@ class ExperimentalCycleCheckpointService:
             trial_id=trial_id,
             cycle_id=cycle_id,
             capability_key=capability_key,
+            observed_at=observed_at,
             decision=decision,
             status=ExperimentalCycleCheckpointStatus.STARTED,
         )

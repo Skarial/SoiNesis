@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from soinesis.experiments.p3 import (
     ExperimentalCycleCheckpointOrderError,
     ExperimentalCycleCheckpointService,
     ExperimentalCycleCheckpointStatus,
+    ExperimentalReplicationPlan,
     SQLiteExperimentalCycleCheckpointRepository,
 )
 from soinesis.infrastructure.sqlite.database import SQLiteDatabase
@@ -40,6 +42,7 @@ PRIVATE_FIELDS = {
     "u_correction",
     "u_intrinsic",
 }
+OBSERVED_AT = datetime(2026, 8, 9, 12, 0, tzinfo=UTC)
 
 
 def build_decision(
@@ -75,6 +78,7 @@ def begin(
     trial_id: str = "trial-0",
     cycle_id: str = "cycle-0",
     capability_key: str = "ALPHA",
+    observed_at: datetime = OBSERVED_AT,
     decision: CapabilityDecision | None = None,
     execution_id: str = "execution-1",
 ) -> ExperimentalCycleCheckpoint:
@@ -86,6 +90,7 @@ def begin(
         trial_id=trial_id,
         cycle_id=cycle_id,
         capability_key=capability_key,
+        observed_at=observed_at,
         decision=decision or build_decision(agent_id=agent_id, capability_key=capability_key),
     )
 
@@ -108,6 +113,18 @@ def test_checkpoint_model_is_frozen_public_and_scope_consistent(tmp_path: Path) 
     checkpoint = begin(service)
 
     assert checkpoint.status is ExperimentalCycleCheckpointStatus.STARTED
+    assert set(ExperimentalCycleCheckpoint.model_fields) == {
+        "execution_id",
+        "sequence_index",
+        "performance_id",
+        "agent_id",
+        "trial_id",
+        "cycle_id",
+        "capability_key",
+        "observed_at",
+        "decision",
+        "status",
+    }
     assert PRIVATE_FIELDS.isdisjoint(ExperimentalCycleCheckpoint.model_fields)
     with pytest.raises(ValidationError):
         checkpoint.sequence_index = 4  # type: ignore[misc]
@@ -141,6 +158,7 @@ def test_experimental_schema_is_opt_in_and_contains_no_private_columns(tmp_path:
             for row in connection.execute("PRAGMA table_info(p3_dev_cycle_checkpoints)").fetchall()
         }
     assert PRIVATE_FIELDS.isdisjoint(columns)
+    assert "observed_at" in columns
 
 
 def test_first_checkpoint_must_be_zero_and_gaps_are_refused(tmp_path: Path) -> None:
@@ -244,6 +262,20 @@ def test_capability_conflict_is_rejected_even_with_a_coherent_new_decision(
     assert repository.get(execution_id="execution-1", sequence_index=0) == original
 
 
+def test_observed_at_conflict_is_rejected_without_modifying_the_checkpoint(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "observed-at-conflict.db"
+    service, repository = build_service(path)
+    original = begin(service, observed_at=OBSERVED_AT)
+
+    with pytest.raises(ExperimentalCycleCheckpointIntegrityError):
+        begin(service, observed_at=OBSERVED_AT + timedelta(seconds=1))
+
+    assert repository.get(execution_id="execution-1", sequence_index=0) == original
+    assert row_count(path) == 1
+
+
 def test_started_snapshot_keeps_verify_after_external_decision_changes(tmp_path: Path) -> None:
     path = tmp_path / "frozen-decision.db"
     service, repository = build_service(path)
@@ -263,8 +295,17 @@ def test_context_and_decision_are_immutable_during_completion(tmp_path: Path) ->
     path = tmp_path / "immutable.db"
     service, repository = build_service(path)
     started = begin(service)
-    completed = service.complete(execution_id="execution-1", sequence_index=0)
+    with sqlite3.connect(path) as connection, pytest.raises(sqlite3.IntegrityError):
+        connection.execute(
+            """
+            UPDATE p3_dev_cycle_checkpoints
+            SET observed_at = '2026-08-09T12:00:01+00:00',
+                checkpoint_status = 'COMPLETED'
+            WHERE execution_id = 'execution-1' AND sequence_index = 0
+            """
+        )
 
+    completed = service.complete(execution_id="execution-1", sequence_index=0)
     assert completed.model_copy(update={"status": started.status}) == started
     with sqlite3.connect(path) as connection:
         with pytest.raises(sqlite3.IntegrityError):
@@ -310,6 +351,7 @@ def test_crash_after_started_reloads_exact_snapshot_and_blocks_next_cycle(
     assert reloaded == started
     assert reloaded is not None
     assert reloaded.status is ExperimentalCycleCheckpointStatus.STARTED
+    assert reloaded.observed_at == OBSERVED_AT
     assert reloaded.decision.action is CapabilityAction.VERIFY
     assert reopened_repository.get(execution_id="execution-1", sequence_index=0) == started
     with pytest.raises(ExperimentalCycleCheckpointOrderError):
@@ -342,6 +384,42 @@ def test_reopen_after_completion_allows_only_the_contiguous_next_cycle(tmp_path:
     assert completed_retry.status is ExperimentalCycleCheckpointStatus.COMPLETED
     assert second.status is ExperimentalCycleCheckpointStatus.STARTED
     assert row_count(path) == 2
+
+
+def test_checkpoint_reproduces_the_exact_plan_performance_after_reopening(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "reproducible-performance.db"
+    capability_block = ["ALPHA"] * 20 + ["BETA"] * 20 + ["GAMMA"] * 20
+    plan = ExperimentalReplicationPlan(
+        capability_order=capability_block * 3,
+        u_intrinsic_by_sequence=[0.25] * 180,
+        u_correction_by_sequence=[0.75] * 180,
+    )
+    first_service, _ = build_service(path)
+    checkpoint = begin(first_service, observed_at=OBSERVED_AT)
+    performance_1 = plan.attempt(
+        performance_id=checkpoint.performance_id,
+        agent_id=checkpoint.agent_id,
+        trial_id=checkpoint.trial_id,
+        cycle_id=checkpoint.cycle_id,
+        sequence_index=checkpoint.sequence_index,
+        observed_at=checkpoint.observed_at,
+    )
+
+    reopened_service, _ = build_service(path)
+    reloaded = reopened_service.get(execution_id="execution-1", sequence_index=0)
+    assert reloaded is not None
+    performance_2 = plan.attempt(
+        performance_id=reloaded.performance_id,
+        agent_id=reloaded.agent_id,
+        trial_id=reloaded.trial_id,
+        cycle_id=reloaded.cycle_id,
+        sequence_index=reloaded.sequence_index,
+        observed_at=reloaded.observed_at,
+    )
+
+    assert performance_1 == performance_2
 
 
 def test_cognitive_modules_do_not_depend_on_experimental_checkpoint() -> None:
