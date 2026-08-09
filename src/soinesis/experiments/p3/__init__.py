@@ -17,6 +17,18 @@ from soinesis.experiments.p3.checkpoint import (
 from soinesis.experiments.p3.checkpoint_sqlite import (
     SQLiteExperimentalCycleCheckpointRepository,
 )
+from soinesis.experiments.p3.condition_config import (
+    ExperimentalCondition,
+    ExperimentalConditionConfiguration,
+    ExperimentalConditionConfigurationError,
+    ExperimentalConditionConfigurationIntegrityError,
+    ExperimentalExecutionConditionConfiguration,
+    ExperimentalExecutionConditionConfigurationRepository,
+    ExperimentalExecutionConditionConfigurationService,
+)
+from soinesis.experiments.p3.condition_config_sqlite import (
+    SQLiteExperimentalExecutionConditionConfigurationRepository,
+)
 from soinesis.experiments.p3.execution_binding import (
     ExperimentalExecutionPlanBinding,
     ExperimentalExecutionPlanBindingError,
@@ -87,6 +99,10 @@ from soinesis.experiments.p3.schedule import (
 __all__ = (
     "ExperimentalCapabilityModule",
     "ExperimentalCapabilitySchedule",
+    "ExperimentalCondition",
+    "ExperimentalConditionConfiguration",
+    "ExperimentalConditionConfigurationError",
+    "ExperimentalConditionConfigurationIntegrityError",
     "ExperimentalCycleCheckpoint",
     "ExperimentalCycleCheckpointError",
     "ExperimentalCycleCheckpointIntegrityError",
@@ -101,6 +117,9 @@ __all__ = (
     "ExperimentalCycleRunnerIntegrityError",
     "ExperimentalCycleStartContext",
     "ExperimentalCycleStartContextRequiredError",
+    "ExperimentalExecutionConditionConfiguration",
+    "ExperimentalExecutionConditionConfigurationRepository",
+    "ExperimentalExecutionConditionConfigurationService",
     "ExperimentalExecutionGenerationProvenance",
     "ExperimentalExecutionGenerationProvenanceError",
     "ExperimentalExecutionGenerationProvenanceIntegrityError",
@@ -136,6 +155,7 @@ __all__ = (
     "InvalidExperimentalCapabilityScheduleError",
     "InvalidExperimentalReplicationPlanError",
     "SQLiteExperimentalCycleCheckpointRepository",
+    "SQLiteExperimentalExecutionConditionConfigurationRepository",
     "SQLiteExperimentalExecutionGenerationProvenanceRepository",
     "SQLiteExperimentalExecutionPlanBindingRepository",
     "SQLiteExperimentalReplicationManifestRepository",
