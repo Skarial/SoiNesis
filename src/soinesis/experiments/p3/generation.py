@@ -5,9 +5,10 @@ from random import Random
 
 from soinesis.experiments.p3.plan import ExperimentalReplicationPlan
 
-_P3_DEV_GENERATOR_VERSION = "p3-dev-plan-v1"
+_P3_DEV_GENERATOR_VERSION = "p3-dev-plan-v2"
 _CAPABILITY_ORDER_SUBSTREAM = "capability-order"
 _INTRINSIC_SUBSTREAM = "u-intrinsic"
+_CORRECTION_SUBSTREAM = "u-correction"
 _SEGMENT_COUNT = 3
 _CAPABILITIES_PER_SEGMENT = 20
 _TOTAL_CYCLES = 180
@@ -22,10 +23,11 @@ class ExperimentalReplicationPlanGenerator:
     """Créer un plan depuis un seed explicite sans conserver d'état aléatoire."""
 
     def generate(self, *, seed: int) -> ExperimentalReplicationPlan:
-        """Générer exactement un plan équilibré depuis deux sous-flux locaux."""
+        """Générer exactement un plan équilibré depuis trois sous-flux locaux."""
         validated_seed = _validate_seed(seed)
         capability_rng = Random(_derive_substream_seed(validated_seed, _CAPABILITY_ORDER_SUBSTREAM))
         intrinsic_rng = Random(_derive_substream_seed(validated_seed, _INTRINSIC_SUBSTREAM))
+        correction_rng = Random(_derive_substream_seed(validated_seed, _CORRECTION_SUBSTREAM))
 
         capability_order: list[str] = []
         for _ in range(_SEGMENT_COUNT):
@@ -34,9 +36,11 @@ class ExperimentalReplicationPlanGenerator:
             capability_order.extend(segment)
 
         u_intrinsic_by_sequence = [intrinsic_rng.random() for _ in range(_TOTAL_CYCLES)]
+        u_correction_by_sequence = [correction_rng.random() for _ in range(_TOTAL_CYCLES)]
         return ExperimentalReplicationPlan(
             capability_order=capability_order,
             u_intrinsic_by_sequence=u_intrinsic_by_sequence,
+            u_correction_by_sequence=u_correction_by_sequence,
         )
 
 

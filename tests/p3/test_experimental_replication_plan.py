@@ -22,6 +22,7 @@ PRIVATE_EXPERIMENTAL_FIELDS = {
     "seed",
     "segment",
     "true_success_probability",
+    "u_correction",
     "u_intrinsic",
 }
 
@@ -38,10 +39,12 @@ def build_plan(
     *,
     capability_order: list[str] | None = None,
     latents: list[float] | None = None,
+    correction_latents: list[float] | None = None,
 ) -> ExperimentalReplicationPlan:
     return ExperimentalReplicationPlan(
         capability_order=capability_order or valid_interleaved_order(),
         u_intrinsic_by_sequence=latents or valid_latents(),
+        u_correction_by_sequence=correction_latents or valid_latents(0.70),
     )
 
 
@@ -70,6 +73,15 @@ def test_plan_requires_exactly_180_intrinsic_latents(length: int) -> None:
         build_plan(latents=invalid_latents)
 
 
+@pytest.mark.parametrize("length", (179, 181))
+def test_plan_requires_exactly_180_correction_latents(length: int) -> None:
+    latents = valid_latents(0.70)
+    invalid_latents = latents[:length] if length < 180 else [*latents, 0.70]
+
+    with pytest.raises(InvalidExperimentalReplicationPlanError, match="180"):
+        build_plan(correction_latents=invalid_latents)
+
+
 @pytest.mark.parametrize(
     "invalid_latent",
     (-0.01, 1.0, 1.01, float("nan"), float("inf"), float("-inf")),
@@ -93,19 +105,48 @@ def test_plan_rejects_boolean_latents(invalid_latent: bool) -> None:
         build_plan(latents=latents)
 
 
+@pytest.mark.parametrize(
+    "invalid_latent",
+    (-0.01, 1.0, 1.01, float("nan"), float("inf"), float("-inf")),
+)
+def test_plan_rejects_invalid_correction_latents(invalid_latent: float) -> None:
+    latents = valid_latents(0.70)
+    latents[91] = invalid_latent
+
+    with pytest.raises(ValueError, match="u_correction"):
+        build_plan(correction_latents=latents)
+
+
+@pytest.mark.parametrize("invalid_latent", (False, True))
+def test_plan_rejects_boolean_correction_latents(invalid_latent: bool) -> None:
+    latents: list[float] = valid_latents(0.70)
+    latents[91] = invalid_latent
+
+    with pytest.raises(TypeError, match="u_correction"):
+        build_plan(correction_latents=latents)
+
+
 def test_plan_defensively_copies_capability_order_and_latents() -> None:
     order = valid_interleaved_order()
     latents = valid_latents()
+    correction_latents = valid_latents(0.70)
     latents[0] = 0.20
-    plan = build_plan(capability_order=order, latents=latents)
+    correction_latents[0] = 0.25
+    plan = build_plan(
+        capability_order=order,
+        latents=latents,
+        correction_latents=correction_latents,
+    )
     order[0] = "GAMMA"
     latents[0] = 0.90
+    correction_latents[0] = 0.95
 
     observation = attempt(plan, sequence_index=0)
 
     assert plan.capability_key_for_sequence(0) == "ALPHA"
     assert observation.capability_key == "ALPHA"
     assert observation.intrinsic_success is True
+    assert vars(plan)["_u_correction_by_sequence"] == (0.25, *valid_latents(0.70)[1:])
 
 
 @pytest.mark.parametrize("sequence_index", (0, 1, 2, 59, 60, 61, 119, 120, 179))
@@ -190,12 +231,27 @@ def test_attempt_accepts_no_capability_or_private_latent() -> None:
     assert "true_success_probability" not in parameters
 
 
-def test_plan_exposes_only_current_capability_and_attempt() -> None:
+def test_plan_exposes_only_current_capability_attempt_and_outcome_resolution() -> None:
     public_members = {
         name for name in ExperimentalReplicationPlan.__dict__ if not name.startswith("_")
     }
 
-    assert public_members == {"attempt", "capability_key_for_sequence"}
+    assert public_members == {
+        "attempt",
+        "capability_key_for_sequence",
+        "resolve_outcome",
+    }
+
+
+def test_plan_requires_both_private_latent_sequences_without_defaults() -> None:
+    parameters = inspect.signature(ExperimentalReplicationPlan).parameters
+
+    assert tuple(parameters) == (
+        "capability_order",
+        "u_intrinsic_by_sequence",
+        "u_correction_by_sequence",
+    )
+    assert all(parameter.default is inspect.Parameter.empty for parameter in parameters.values())
 
 
 def test_attempt_returns_only_the_public_performance_observation() -> None:

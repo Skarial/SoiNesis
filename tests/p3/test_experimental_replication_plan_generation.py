@@ -34,6 +34,7 @@ PRIVATE_EXPERIMENTAL_FIELDS = {
     "seed",
     "segment",
     "true_success_probability",
+    "u_correction",
     "u_intrinsic",
 }
 
@@ -75,6 +76,10 @@ def private_intrinsic_latents(plan: ExperimentalReplicationPlan) -> tuple[float,
     return cast(tuple[float, ...], vars(plan)["_u_intrinsic_by_sequence"])
 
 
+def private_correction_latents(plan: ExperimentalReplicationPlan) -> tuple[float, ...]:
+    return cast(tuple[float, ...], vars(plan)["_u_correction_by_sequence"])
+
+
 @pytest.mark.parametrize("invalid_seed", (False, True, 1.0, "1", None))
 def test_generator_requires_a_strict_integer_seed(invalid_seed: object) -> None:
     generator = ExperimentalReplicationPlanGenerator()
@@ -98,6 +103,7 @@ def test_distinct_generator_instances_and_same_seed_generate_identical_plans() -
 
     assert private_capability_order(first) == private_capability_order(second)
     assert private_intrinsic_latents(first) == private_intrinsic_latents(second)
+    assert private_correction_latents(first) == private_correction_latents(second)
 
 
 def test_call_order_does_not_change_a_repeated_seed() -> None:
@@ -109,6 +115,7 @@ def test_call_order_does_not_change_a_repeated_seed() -> None:
 
     assert private_capability_order(first_seed_one) == private_capability_order(second_seed_one)
     assert private_intrinsic_latents(first_seed_one) == private_intrinsic_latents(second_seed_one)
+    assert private_correction_latents(first_seed_one) == private_correction_latents(second_seed_one)
 
 
 def test_fixed_distinct_seeds_generate_different_raw_plans() -> None:
@@ -117,18 +124,21 @@ def test_fixed_distinct_seeds_generate_different_raw_plans() -> None:
     first = generator.generate(seed=12345)
     second = generator.generate(seed=67890)
 
-    assert private_capability_order(first) != private_capability_order(
-        second
-    ) or private_intrinsic_latents(first) != private_intrinsic_latents(second)
+    assert (
+        private_capability_order(first) != private_capability_order(second)
+        or private_intrinsic_latents(first) != private_intrinsic_latents(second)
+        or private_correction_latents(first) != private_correction_latents(second)
+    )
 
 
-def test_intrinsic_substream_is_derived_independently_from_order_consumption() -> None:
+def test_latent_substreams_are_derived_independently_from_other_consumption() -> None:
     private_module_members = vars(generation_module)
     derive_substream_seed = cast(
         Callable[[int, str], int],
         private_module_members["_derive_substream_seed"],
     )
     intrinsic_tag = cast(str, private_module_members["_INTRINSIC_SUBSTREAM"])
+    correction_tag = cast(str, private_module_members["_CORRECTION_SUBSTREAM"])
     order_tag = cast(str, private_module_members["_CAPABILITY_ORDER_SUBSTREAM"])
     root_seed = 12345
     order_rng = Random(derive_substream_seed(root_seed, order_tag))
@@ -136,10 +146,33 @@ def test_intrinsic_substream_is_derived_independently_from_order_consumption() -
         order_rng.random()
     expected_intrinsic_rng = Random(derive_substream_seed(root_seed, intrinsic_tag))
     expected_latents = tuple(expected_intrinsic_rng.random() for _ in range(180))
+    intrinsic_rng = Random(derive_substream_seed(root_seed, intrinsic_tag))
+    for _ in range(10_000):
+        intrinsic_rng.random()
+    expected_correction_rng = Random(derive_substream_seed(root_seed, correction_tag))
+    expected_correction_latents = tuple(expected_correction_rng.random() for _ in range(180))
 
     plan = ExperimentalReplicationPlanGenerator().generate(seed=root_seed)
 
     assert private_intrinsic_latents(plan) == expected_latents
+    assert private_correction_latents(plan) == expected_correction_latents
+
+
+def test_generator_version_and_three_private_substreams_are_explicit() -> None:
+    private_module_members = vars(generation_module)
+
+    assert private_module_members["_P3_DEV_GENERATOR_VERSION"] == "p3-dev-plan-v2"
+    assert private_module_members["_CAPABILITY_ORDER_SUBSTREAM"] == "capability-order"
+    assert private_module_members["_INTRINSIC_SUBSTREAM"] == "u-intrinsic"
+    assert private_module_members["_CORRECTION_SUBSTREAM"] == "u-correction"
+
+
+def test_generator_creates_exactly_180_values_for_each_latent_stream() -> None:
+    plan = ExperimentalReplicationPlanGenerator().generate(seed=12345)
+
+    assert len(private_capability_order(plan)) == 180
+    assert len(private_intrinsic_latents(plan)) == 180
+    assert len(private_correction_latents(plan)) == 180
 
 
 @pytest.mark.parametrize("seed", (0, 1, 12345, -987654321))

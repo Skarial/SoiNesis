@@ -11,6 +11,7 @@ from soinesis.experiments.p3.outcome import (
     ExperimentalTrialOutcomeResolver,
 )
 from soinesis.experiments.p3.plan import (
+    ExperimentalPlanPerformanceMismatchError,
     ExperimentalReplicationPlan,
     InvalidExperimentalReplicationPlanError,
 )
@@ -22,6 +23,7 @@ from soinesis.experiments.p3.schedule import (
 __all__ = (
     "ExperimentalCapabilityModule",
     "ExperimentalCapabilitySchedule",
+    "ExperimentalPlanPerformanceMismatchError",
     "ExperimentalReplicationPlan",
     "ExperimentalReplicationPlanGenerator",
     "ExperimentalTrialContextMismatchError",
