@@ -63,6 +63,13 @@ from soinesis.experiments.p3.outcome import (
     ExperimentalTrialOutcome,
     ExperimentalTrialOutcomeResolver,
 )
+from soinesis.experiments.p3.paired_execution import (
+    ExperimentalPairedConditionExecutionError,
+    ExperimentalPairedConditionExecutionIntegrityError,
+    ExperimentalPairedConditionExecutionResult,
+    ExperimentalPairedConditionExecutionRunner,
+    ExperimentalPairedConditionNotFoundError,
+)
 from soinesis.experiments.p3.pairing import (
     ExperimentalPairedConditionGroup,
     ExperimentalPairedConditionGroupRepository,
@@ -170,9 +177,14 @@ __all__ = (
     "ExperimentalExecutionPlanBindingRepository",
     "ExperimentalExecutionPlanBindingService",
     "ExperimentalGeneratedReplicationPlan",
+    "ExperimentalPairedConditionExecutionError",
+    "ExperimentalPairedConditionExecutionIntegrityError",
+    "ExperimentalPairedConditionExecutionResult",
+    "ExperimentalPairedConditionExecutionRunner",
     "ExperimentalPairedConditionGroup",
     "ExperimentalPairedConditionGroupRepository",
     "ExperimentalPairedConditionGroupService",
+    "ExperimentalPairedConditionNotFoundError",
     "ExperimentalPairingError",
     "ExperimentalPairingIntegrityError",
     "ExperimentalPlanGenerationEnvironmentError",
