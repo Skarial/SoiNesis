@@ -27,6 +27,7 @@ from soinesis.ports.system import Clock, IdentifierGenerator
 
 DEV_PRIOR_ALPHA: Final = 3.0
 DEV_PRIOR_BETA: Final = 2.0
+DEV_PRIOR_ESTIMATED_SUCCESS: Final = DEV_PRIOR_ALPHA / (DEV_PRIOR_ALPHA + DEV_PRIOR_BETA)
 FIXED_BASELINE_ESTIMATE: Final = 0.60
 HELP_VERIFY_BOUNDARY: Final = 0.50
 VERIFY_DIRECT_BOUNDARY: Final = 0.80
@@ -56,6 +57,14 @@ class CapabilitySelfModelRevisionStatus(StrEnum):
 
     REVISED = "REVISED"
     NO_REVISION = "NO_REVISION"
+
+
+class CapabilityPostPerformanceRevisionStatus(StrEnum):
+    """Issue de révision propre à la façade post-performance."""
+
+    REVISED = "REVISED"
+    NO_REVISION = "NO_REVISION"
+    SKIPPED_OLD_DUPLICATE = "SKIPPED_OLD_DUPLICATE"
 
 
 class MetacognitiveCapabilityUpdateResult(BaseModel):
@@ -118,6 +127,25 @@ class CapabilitySelfModelRevisionResult(BaseModel):
     previous_attribute_version: int = Field(ge=1, strict=True)
     resulting_attribute_version: int = Field(ge=1, strict=True)
     triggering_performance_id: str | None = Field(default=None, min_length=1)
+
+
+class CapabilityPostPerformanceProcessingResult(BaseModel):
+    """Résultat auditable du traitement post-performance complet de C."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    performance_id: str = Field(min_length=1)
+    agent_id: str = Field(min_length=1)
+    capability_key: str = Field(min_length=1)
+    metacognitive_status: MetacognitiveUpdateStatus
+    self_model_revision_status: CapabilityPostPerformanceRevisionStatus
+    metacognitive_version_before: int = Field(ge=1, strict=True)
+    metacognitive_version_after: int = Field(ge=1, strict=True)
+    self_model_version_before: int = Field(ge=1, strict=True)
+    self_model_version_after: int = Field(ge=1, strict=True)
+    attribute_version_before: int = Field(ge=1, strict=True)
+    attribute_version_after: int = Field(ge=1, strict=True)
+    resulting_action: CapabilityAction
 
 
 class CapabilityPerformanceNotFoundError(LookupError):
@@ -1019,3 +1047,182 @@ class CapabilitySelfModelRevisionService:
             unit_of_work.journal.append(event)
             unit_of_work.commit()
             return result
+
+
+class CapabilityPostPerformanceProcessingService:
+    """Enchaîner pour C l'apprentissage puis la révision dans deux transactions."""
+
+    def __init__(
+        self,
+        *,
+        unit_of_work_factory: CapabilityUnitOfWorkFactory,
+        metacognitive_update_service: MetacognitiveCapabilityUpdateService,
+        self_model_revision_service: CapabilitySelfModelRevisionService,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._metacognitive_update_service = metacognitive_update_service
+        self._self_model_revision_service = self_model_revision_service
+        self._decision_policy = CapabilityDecisionPolicy()
+
+    def process(self, *, performance_id: str) -> CapabilityPostPerformanceProcessingResult:
+        """Traiter une preuve persistée seulement si sa capacité est déjà initialisée."""
+        performance = self._ensure_capability_is_initialized(performance_id=performance_id)
+
+        metacognitive_result = self._metacognitive_update_service.process(
+            performance_id=performance_id
+        )
+        if metacognitive_result.status is MetacognitiveUpdateStatus.ALREADY_PROCESSED:
+            current_meta, current_model, current_attribute = self._read_current_cognitive_state(
+                agent_id=metacognitive_result.agent_id,
+                capability_key=metacognitive_result.capability_key,
+            )
+            if current_meta.last_processed_performance_id != performance.id:
+                cursor_sequence_index = current_meta.last_processed_sequence_index
+                if (
+                    cursor_sequence_index is None
+                    or performance.sequence_index >= cursor_sequence_index
+                ):
+                    raise MetacognitiveStateIntegrityError(
+                        "Le vieux doublon ne précède pas strictement le curseur métacognitif."
+                    )
+                return CapabilityPostPerformanceProcessingResult(
+                    performance_id=metacognitive_result.performance_id,
+                    agent_id=metacognitive_result.agent_id,
+                    capability_key=metacognitive_result.capability_key,
+                    metacognitive_status=metacognitive_result.status,
+                    self_model_revision_status=(
+                        CapabilityPostPerformanceRevisionStatus.SKIPPED_OLD_DUPLICATE
+                    ),
+                    metacognitive_version_before=metacognitive_result.previous_version,
+                    metacognitive_version_after=metacognitive_result.resulting_version,
+                    self_model_version_before=current_model.version,
+                    self_model_version_after=current_model.version,
+                    attribute_version_before=current_attribute.attribute_version,
+                    attribute_version_after=current_attribute.attribute_version,
+                    resulting_action=self._decision_policy.action_for_estimated_success(
+                        current_attribute.estimated_success
+                    ),
+                )
+        revision_result = self._self_model_revision_service.revise(
+            agent_id=metacognitive_result.agent_id,
+            capability_key=metacognitive_result.capability_key,
+        )
+        return CapabilityPostPerformanceProcessingResult(
+            performance_id=metacognitive_result.performance_id,
+            agent_id=metacognitive_result.agent_id,
+            capability_key=metacognitive_result.capability_key,
+            self_model_revision_status=CapabilityPostPerformanceRevisionStatus(
+                revision_result.status.value
+            ),
+            metacognitive_status=metacognitive_result.status,
+            metacognitive_version_before=metacognitive_result.previous_version,
+            metacognitive_version_after=metacognitive_result.resulting_version,
+            self_model_version_before=revision_result.previous_self_model_version,
+            self_model_version_after=revision_result.resulting_self_model_version,
+            attribute_version_before=revision_result.previous_attribute_version,
+            attribute_version_after=revision_result.resulting_attribute_version,
+            resulting_action=revision_result.resulting_action,
+        )
+
+    def _ensure_capability_is_initialized(
+        self,
+        *,
+        performance_id: str,
+    ) -> CapabilityPerformanceObservation:
+        """Refuser avant apprentissage une preuve absente ou un bootstrap incomplet."""
+        with self._unit_of_work_factory() as unit_of_work:
+            performance = unit_of_work.capability_performances.get(performance_id)
+            if performance is None:
+                raise CapabilityPerformanceNotFoundError(
+                    f"La performance persistée {performance_id!r} n'existe pas."
+                )
+            current_attribute = unit_of_work.capability_self_attributes.get_current(
+                agent_id=performance.agent_id,
+                capability_key=performance.capability_key,
+            )
+            attribute_versions = unit_of_work.capability_self_attributes.list_versions(
+                agent_id=performance.agent_id,
+                capability_key=performance.capability_key,
+            )
+            current_meta = unit_of_work.metacognitive_states.get_current(
+                agent_id=performance.agent_id,
+                capability_key=performance.capability_key,
+            )
+            current_model = unit_of_work.self_model_versions.get_current(
+                agent_id=performance.agent_id
+            )
+        if current_attribute is None:
+            raise CapabilitySelfModelNotInitializedError(
+                "La capacité doit être initialisée avant sa première performance traitée par C."
+            )
+        if not attribute_versions or attribute_versions[-1] != current_attribute:
+            raise CapabilitySelfModelIntegrityError(
+                "Le CapabilitySelfAttribute courant ne termine pas son historique."
+            )
+        initial_attribute = attribute_versions[0]
+        if (
+            initial_attribute.agent_id != performance.agent_id
+            or initial_attribute.capability_key != performance.capability_key
+            or initial_attribute.attribute_version != 1
+            or initial_attribute.previous_attribute_id is not None
+            or initial_attribute.estimated_success != DEV_PRIOR_ESTIMATED_SUCCESS
+        ):
+            raise CapabilitySelfModelIntegrityError(
+                "Le premier CapabilitySelfAttribute ne représente pas le prior DEV initial."
+            )
+        if initial_attribute.created_at > performance.observed_at:
+            raise CapabilitySelfModelNotInitializedError(
+                "L'initialisation de la capacité doit précéder la performance traitée par C."
+            )
+        if current_meta is None or current_model is None:
+            raise CapabilitySelfModelIntegrityError(
+                "Une capacité initialisée doit posséder un MetaState et un SelfModel courants."
+            )
+        if (
+            current_attribute.agent_id != performance.agent_id
+            or current_attribute.capability_key != performance.capability_key
+            or current_meta.agent_id != performance.agent_id
+            or current_meta.capability_key != performance.capability_key
+            or current_model.agent_id != performance.agent_id
+        ):
+            raise CapabilitySelfModelIntegrityError(
+                "La précondition d'initialisation appartient à un autre périmètre."
+            )
+        return performance
+
+    def _read_current_cognitive_state(
+        self,
+        *,
+        agent_id: str,
+        capability_key: str,
+    ) -> tuple[
+        VersionedMetacognitiveCapabilityState,
+        SelfModelVersion,
+        CapabilitySelfAttribute,
+    ]:
+        """Relire l'état public courant servant à classifier un ALREADY_PROCESSED."""
+        with self._unit_of_work_factory() as unit_of_work:
+            current_meta = unit_of_work.metacognitive_states.get_current(
+                agent_id=agent_id,
+                capability_key=capability_key,
+            )
+            current_model = unit_of_work.self_model_versions.get_current(agent_id=agent_id)
+            current_attribute = unit_of_work.capability_self_attributes.get_current(
+                agent_id=agent_id,
+                capability_key=capability_key,
+            )
+        if current_meta is None or current_model is None or current_attribute is None:
+            raise CapabilitySelfModelIntegrityError(
+                "L'état cognitif courant a disparu après le traitement métacognitif."
+            )
+        if (
+            current_meta.agent_id != agent_id
+            or current_meta.capability_key != capability_key
+            or current_model.agent_id != agent_id
+            or current_attribute.agent_id != agent_id
+            or current_attribute.capability_key != capability_key
+        ):
+            raise CapabilitySelfModelIntegrityError(
+                "L'état cognitif courant relu appartient à un autre périmètre."
+            )
+        return current_meta, current_model, current_attribute
