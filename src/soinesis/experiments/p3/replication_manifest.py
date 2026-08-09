@@ -48,6 +48,9 @@ class ExperimentalReplicationExecutionManifest(BaseModel):
         )
         if len(set(performance_ids)) != _TOTAL_CYCLES:
             raise ValueError("Chaque performance_id doit être unique dans une exécution.")
+        agent_ids = {context.start_context.agent_id for context in self.cycle_contexts}
+        if len(agent_ids) != 1:
+            raise ValueError("Une exécution doit représenter la trajectoire d'un seul agent_id.")
         return self
 
 

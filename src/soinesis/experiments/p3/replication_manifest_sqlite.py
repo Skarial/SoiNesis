@@ -25,6 +25,20 @@ _MANIFEST_COLUMNS: Final = (
     "observed_at",
 )
 _TOTAL_CYCLES: Final = 180
+_PERFORMANCE_INDEX_NAME: Final = "p3_dev_replication_cycle_manifest_performance_id_uq"
+_AGENT_EXCLUSIVE_TRIGGER_NAME: Final = "p3_dev_replication_cycle_manifest_agent_exclusive"
+_AGENT_EXCLUSIVE_TRIGGER_SQL: Final = f"""
+    CREATE TRIGGER IF NOT EXISTS {_AGENT_EXCLUSIVE_TRIGGER_NAME}
+    BEFORE INSERT ON {_TABLE_NAME}
+    WHEN EXISTS (
+        SELECT 1 FROM {_TABLE_NAME}
+        WHERE agent_id = NEW.agent_id
+          AND execution_id <> NEW.execution_id
+    )
+    BEGIN
+        SELECT RAISE(ABORT, 'agent_id déjà rattaché à une autre exécution');
+    END
+"""
 
 
 class SQLiteExperimentalReplicationManifestRepository:
@@ -64,6 +78,17 @@ class SQLiteExperimentalReplicationManifestRepository:
                 raise ExperimentalReplicationManifestIntegrityError(
                     "La table de manifeste P3 DEV possède un schéma incompatible."
                 )
+            self._audit_existing_isolation(connection)
+            connection.execute(
+                f"""
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    {_PERFORMANCE_INDEX_NAME}
+                ON {_TABLE_NAME}(performance_id)
+                """
+            )
+            self._validate_performance_index(connection)
+            connection.execute(_AGENT_EXCLUSIVE_TRIGGER_SQL)
+            self._validate_agent_exclusive_trigger(connection)
             connection.execute(
                 f"""
                 CREATE TRIGGER IF NOT EXISTS p3_dev_replication_cycle_manifest_no_update
@@ -82,6 +107,79 @@ class SQLiteExperimentalReplicationManifestRepository:
                 END
                 """
             )
+
+    @staticmethod
+    def _audit_existing_isolation(connection: sqlite3.Connection) -> None:
+        reused_agent = connection.execute(
+            f"""
+            SELECT agent_id FROM {_TABLE_NAME}
+            GROUP BY agent_id
+            HAVING COUNT(DISTINCT execution_id) > 1
+            LIMIT 1
+            """
+        ).fetchone()
+        if reused_agent is not None:
+            raise ExperimentalReplicationManifestIntegrityError(
+                "Un agent_id historique appartient à plusieurs exécutions P3 DEV."
+            )
+        reused_performance = connection.execute(
+            f"""
+            SELECT performance_id FROM {_TABLE_NAME}
+            GROUP BY performance_id
+            HAVING COUNT(DISTINCT execution_id) > 1
+            LIMIT 1
+            """
+        ).fetchone()
+        if reused_performance is not None:
+            raise ExperimentalReplicationManifestIntegrityError(
+                "Un performance_id historique appartient à plusieurs exécutions P3 DEV."
+            )
+
+    @staticmethod
+    def _validate_performance_index(connection: sqlite3.Connection) -> None:
+        index = next(
+            (
+                row
+                for row in connection.execute(f"PRAGMA index_list({_TABLE_NAME})").fetchall()
+                if str(row["name"]) == _PERFORMANCE_INDEX_NAME
+            ),
+            None,
+        )
+        columns = tuple(
+            str(row["name"])
+            for row in connection.execute(
+                f"PRAGMA index_info({_PERFORMANCE_INDEX_NAME})"
+            ).fetchall()
+        )
+        if (
+            index is None
+            or int(index["unique"]) != 1
+            or int(index["partial"]) != 0
+            or columns != ("performance_id",)
+        ):
+            raise ExperimentalReplicationManifestIntegrityError(
+                "L'index global de performance_id possède une définition incompatible."
+            )
+
+    @staticmethod
+    def _validate_agent_exclusive_trigger(connection: sqlite3.Connection) -> None:
+        row = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?",
+            (_AGENT_EXCLUSIVE_TRIGGER_NAME,),
+        ).fetchone()
+        actual_sql = None if row is None else row["sql"]
+        if actual_sql is None or SQLiteExperimentalReplicationManifestRepository._normalize_sql(
+            str(actual_sql)
+        ) != SQLiteExperimentalReplicationManifestRepository._normalize_sql(
+            _AGENT_EXCLUSIVE_TRIGGER_SQL
+        ):
+            raise ExperimentalReplicationManifestIntegrityError(
+                "Le trigger d'exclusivité agent possède une définition incompatible."
+            )
+
+    @staticmethod
+    def _normalize_sql(sql: str) -> str:
+        return " ".join(sql.replace("IF NOT EXISTS", "").split()).casefold()
 
     def get(self, *, execution_id: str) -> ExperimentalReplicationExecutionManifest | None:
         self._validate_execution_id(execution_id)

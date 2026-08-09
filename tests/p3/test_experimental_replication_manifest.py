@@ -41,23 +41,28 @@ PRIVATE_FIELDS = {
 def build_manifest(
     *,
     execution_id: str = "execution-1",
+    agent_id: str = "agent-1",
+    performance_id_prefix: str = "performance",
     changed_index: int | None = None,
     changed_performance_id: str | None = None,
+    changed_agent_id: str | None = None,
     changed_observed_at: datetime | None = None,
 ) -> ExperimentalReplicationExecutionManifest:
     contexts: list[ExperimentalReplicationCycleContext] = []
     for sequence_index in range(180):
-        performance_id = f"performance-{sequence_index}"
+        performance_id = f"{performance_id_prefix}-{sequence_index}"
         observed_at = OBSERVED_AT + timedelta(minutes=sequence_index)
+        context_agent_id = agent_id
         if sequence_index == changed_index:
             performance_id = changed_performance_id or performance_id
+            context_agent_id = changed_agent_id or context_agent_id
             observed_at = changed_observed_at or observed_at
         contexts.append(
             ExperimentalReplicationCycleContext(
                 sequence_index=sequence_index,
                 start_context=ExperimentalCycleStartContext(
                     performance_id=performance_id,
-                    agent_id="agent-1",
+                    agent_id=context_agent_id,
                     trial_id=f"trial-{sequence_index}",
                     cycle_id=f"cycle-{sequence_index}",
                     observed_at=observed_at,
@@ -205,6 +210,11 @@ def test_manifest_requires_ordered_indices_and_unique_performance_ids() -> None:
         )
 
 
+def test_manifest_requires_exactly_one_agent_id() -> None:
+    with pytest.raises(ValidationError, match="seul agent_id"):
+        build_manifest(changed_index=73, changed_agent_id="agent-2")
+
+
 def test_manifest_does_not_invent_cycle_id_uniqueness_or_timestamp_ordering() -> None:
     contexts = list(build_manifest().cycle_contexts)
     for index, context in enumerate(contexts):
@@ -260,6 +270,13 @@ def test_manifest_schema_is_opt_in_explicit_and_enforces_performance_uniqueness(
             "cycle_id",
             "observed_at",
         }
+        indexes = {
+            str(row[1]): int(row[2])
+            for row in connection.execute(
+                "PRAGMA index_list(p3_dev_replication_cycle_manifest)"
+            ).fetchall()
+        }
+        assert indexes["p3_dev_replication_cycle_manifest_performance_id_uq"] == 1
         first = (
             "execution-1",
             0,
@@ -373,6 +390,89 @@ def test_register_rolls_back_all_rows_when_an_insert_fails_mid_manifest(tmp_path
     assert manifest_row_count(path) == 0
 
 
+def test_agent_id_cannot_be_reused_by_another_execution(tmp_path: Path) -> None:
+    path = tmp_path / "agent-exclusive.db"
+    harness = build_harness(path)
+    prepare_3n_and_3o(harness, execution_id="execution-1")
+    prepare_3n_and_3o(harness, execution_id="execution-2")
+    first = build_manifest(
+        execution_id="execution-1",
+        agent_id="agent-A",
+        performance_id_prefix="execution-1-performance",
+    )
+    second = build_manifest(
+        execution_id="execution-2",
+        agent_id="agent-A",
+        performance_id_prefix="execution-2-performance",
+    )
+    harness.manifest_service.register(manifest=first)
+
+    with pytest.raises(sqlite3.IntegrityError, match="agent_id"):
+        harness.manifest_service.register(manifest=second)
+
+    assert harness.manifest_service.get(execution_id="execution-1") == first
+    assert harness.manifest_service.get(execution_id="execution-2") is None
+    assert manifest_row_count(path, execution_id="execution-1") == 180
+    assert manifest_row_count(path, execution_id="execution-2") == 0
+
+
+def test_distinct_agents_and_performance_ids_can_share_one_database(tmp_path: Path) -> None:
+    path = tmp_path / "two-executions.db"
+    harness = build_harness(path)
+    prepare_3n_and_3o(harness, execution_id="execution-1")
+    prepare_3n_and_3o(harness, execution_id="execution-2")
+    first = build_manifest(
+        execution_id="execution-1",
+        agent_id="agent-A",
+        performance_id_prefix="execution-1-performance",
+    )
+    second = build_manifest(
+        execution_id="execution-2",
+        agent_id="agent-B",
+        performance_id_prefix="execution-2-performance",
+    )
+
+    harness.manifest_service.register(manifest=first)
+    harness.manifest_service.register(manifest=second)
+
+    assert harness.manifest_service.get(execution_id="execution-1") == first
+    assert harness.manifest_service.get(execution_id="execution-2") == second
+    assert manifest_row_count(path, execution_id="execution-1") == 180
+    assert manifest_row_count(path, execution_id="execution-2") == 180
+
+
+def test_global_performance_id_conflict_rolls_back_the_second_execution(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "global-performance-id.db"
+    harness = build_harness(path)
+    prepare_3n_and_3o(harness, execution_id="execution-1")
+    prepare_3n_and_3o(harness, execution_id="execution-2")
+    first = build_manifest(
+        execution_id="execution-1",
+        agent_id="agent-A",
+        performance_id_prefix="execution-1-performance",
+        changed_index=73,
+        changed_performance_id="shared-performance-73",
+    )
+    second = build_manifest(
+        execution_id="execution-2",
+        agent_id="agent-B",
+        performance_id_prefix="execution-2-performance",
+        changed_index=73,
+        changed_performance_id="shared-performance-73",
+    )
+    harness.manifest_service.register(manifest=first)
+
+    with pytest.raises(sqlite3.IntegrityError):
+        harness.manifest_service.register(manifest=second)
+
+    assert harness.manifest_service.get(execution_id="execution-1") == first
+    assert harness.manifest_service.get(execution_id="execution-2") is None
+    assert manifest_row_count(path, execution_id="execution-1") == 180
+    assert manifest_row_count(path, execution_id="execution-2") == 0
+
+
 def test_sqlite_manifest_rows_reject_update_and_delete(tmp_path: Path) -> None:
     path = tmp_path / "immutable.db"
     harness = build_harness(path)
@@ -442,3 +542,121 @@ def test_get_rejects_partial_or_invalid_persistent_manifests(tmp_path: Path) -> 
         )
     with pytest.raises(ExperimentalReplicationManifestIntegrityError, match="invalide"):
         invalid.manifest_repository.get(execution_id="execution-1")
+
+
+def create_legacy_manifest_table(path: Path) -> None:
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE p3_dev_replication_cycle_manifest (
+                execution_id TEXT NOT NULL,
+                sequence_index INTEGER NOT NULL,
+                performance_id TEXT NOT NULL,
+                agent_id TEXT NOT NULL,
+                trial_id TEXT NOT NULL,
+                cycle_id TEXT NOT NULL,
+                observed_at TEXT NOT NULL,
+                PRIMARY KEY (execution_id, sequence_index),
+                UNIQUE (execution_id, performance_id)
+            )
+            """
+        )
+
+
+def insert_legacy_manifest_row(
+    path: Path,
+    *,
+    execution_id: str,
+    performance_id: str,
+    agent_id: str,
+) -> None:
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """
+            INSERT INTO p3_dev_replication_cycle_manifest
+            VALUES (?, 0, ?, ?, 'trial-0', 'cycle-0', ?)
+            """,
+            (execution_id, performance_id, agent_id, OBSERVED_AT.isoformat()),
+        )
+
+
+def test_initialize_schema_rejects_legacy_agent_shared_by_executions(tmp_path: Path) -> None:
+    path = tmp_path / "legacy-agent-corruption.db"
+    create_legacy_manifest_table(path)
+    insert_legacy_manifest_row(
+        path,
+        execution_id="execution-1",
+        performance_id="performance-1",
+        agent_id="agent-A",
+    )
+    insert_legacy_manifest_row(
+        path,
+        execution_id="execution-2",
+        performance_id="performance-2",
+        agent_id="agent-A",
+    )
+    repository = SQLiteExperimentalReplicationManifestRepository(SQLiteDatabase(path))
+
+    with pytest.raises(ExperimentalReplicationManifestIntegrityError, match="agent_id historique"):
+        repository.initialize_schema()
+
+
+def test_initialize_schema_rejects_legacy_performance_shared_by_executions(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "legacy-performance-corruption.db"
+    create_legacy_manifest_table(path)
+    insert_legacy_manifest_row(
+        path,
+        execution_id="execution-1",
+        performance_id="shared-performance",
+        agent_id="agent-A",
+    )
+    insert_legacy_manifest_row(
+        path,
+        execution_id="execution-2",
+        performance_id="shared-performance",
+        agent_id="agent-B",
+    )
+    repository = SQLiteExperimentalReplicationManifestRepository(SQLiteDatabase(path))
+
+    with pytest.raises(
+        ExperimentalReplicationManifestIntegrityError,
+        match="performance_id historique",
+    ):
+        repository.initialize_schema()
+
+
+def test_initialize_schema_rejects_incompatible_named_global_index(tmp_path: Path) -> None:
+    path = tmp_path / "incompatible-index.db"
+    create_legacy_manifest_table(path)
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX p3_dev_replication_cycle_manifest_performance_id_uq
+            ON p3_dev_replication_cycle_manifest(agent_id)
+            """
+        )
+    repository = SQLiteExperimentalReplicationManifestRepository(SQLiteDatabase(path))
+
+    with pytest.raises(ExperimentalReplicationManifestIntegrityError, match="index global"):
+        repository.initialize_schema()
+
+
+def test_initialize_schema_rejects_incompatible_named_agent_trigger(tmp_path: Path) -> None:
+    path = tmp_path / "incompatible-trigger.db"
+    create_legacy_manifest_table(path)
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """
+            CREATE TRIGGER p3_dev_replication_cycle_manifest_agent_exclusive
+            BEFORE INSERT ON p3_dev_replication_cycle_manifest
+            BEGIN
+                SELECT 1;
+            END
+            """
+        )
+    repository = SQLiteExperimentalReplicationManifestRepository(SQLiteDatabase(path))
+
+    with pytest.raises(ExperimentalReplicationManifestIntegrityError, match="trigger"):
+        repository.initialize_schema()
