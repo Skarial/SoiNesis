@@ -45,6 +45,13 @@ class MetacognitiveUpdateStatus(StrEnum):
     ALREADY_PROCESSED = "ALREADY_PROCESSED"
 
 
+class CapabilityPerformanceRecordingStatus(StrEnum):
+    """Issues auditables de la persistance canonique d'une preuve intrinsèque."""
+
+    RECORDED = "RECORDED"
+    ALREADY_RECORDED = "ALREADY_RECORDED"
+
+
 class CapabilitySelfModelInitializationStatus(StrEnum):
     """Issues publiques de l'initialisation d'une capacité dans le SelfModel."""
 
@@ -80,6 +87,18 @@ class MetacognitiveCapabilityUpdateResult(BaseModel):
     resulting_version: int = Field(ge=1, strict=True)
     previous_estimated_success: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
     resulting_estimated_success: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+
+
+class CapabilityPerformanceRecordingResult(BaseModel):
+    """Résultat public minimal de l'enregistrement durable d'une performance."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    performance_id: str = Field(min_length=1)
+    agent_id: str = Field(min_length=1)
+    capability_key: str = Field(min_length=1)
+    sequence_index: int = Field(ge=0, strict=True)
+    status: CapabilityPerformanceRecordingStatus
 
 
 class SignificantSelfRevisionAssessment(BaseModel):
@@ -160,6 +179,10 @@ class CapabilityPerformanceOrderError(ValueError):
     """Refuser une preuve ancienne ou un saut dans l'ordre causal d'une capacité."""
 
 
+class CapabilityPerformanceRecordingIntegrityError(ValueError):
+    """Refuser la réutilisation d'un identifiant pour une performance différente."""
+
+
 class MetacognitiveLambdaMismatchError(ValueError):
     """Refuser de poursuivre un état avec un facteur d'oubli différent."""
 
@@ -201,6 +224,62 @@ class CapabilityPerformanceProvenancePolicy:
             raise CapabilityPerformanceProvenanceError(
                 "Seule une performance DIRECT_ENVIRONMENT peut alimenter la métacognition."
             )
+
+
+class CapabilityPerformanceRecordingService:
+    """Enregistrer durablement une preuve intrinsèque par une voie idempotente unique."""
+
+    def __init__(self, *, unit_of_work_factory: CapabilityUnitOfWorkFactory) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._provenance_policy = CapabilityPerformanceProvenancePolicy()
+
+    def record(
+        self,
+        *,
+        observation: CapabilityPerformanceObservation,
+    ) -> CapabilityPerformanceRecordingResult:
+        """Ajouter une preuve neuve ou reconnaître un retry strictement identique."""
+        with self._unit_of_work_factory() as unit_of_work:
+            try:
+                self._provenance_policy.validate(observation)
+            except CapabilityPerformanceProvenanceError as provenance_error:
+                existing = unit_of_work.capability_performances.get(observation.id)
+                if existing is not None and existing != observation:
+                    raise CapabilityPerformanceRecordingIntegrityError(
+                        "Le performance_id existe déjà avec un contenu différent."
+                    ) from provenance_error
+                raise
+            existing = unit_of_work.capability_performances.get(observation.id)
+            if existing is not None:
+                if existing != observation:
+                    raise CapabilityPerformanceRecordingIntegrityError(
+                        "Le performance_id existe déjà avec un contenu différent."
+                    )
+                return _capability_performance_recording_result(
+                    observation=observation,
+                    status=CapabilityPerformanceRecordingStatus.ALREADY_RECORDED,
+                )
+
+            unit_of_work.capability_performances.add(observation)
+            unit_of_work.commit()
+            return _capability_performance_recording_result(
+                observation=observation,
+                status=CapabilityPerformanceRecordingStatus.RECORDED,
+            )
+
+
+def _capability_performance_recording_result(
+    *,
+    observation: CapabilityPerformanceObservation,
+    status: CapabilityPerformanceRecordingStatus,
+) -> CapabilityPerformanceRecordingResult:
+    return CapabilityPerformanceRecordingResult(
+        performance_id=observation.id,
+        agent_id=observation.agent_id,
+        capability_key=observation.capability_key,
+        sequence_index=observation.sequence_index,
+        status=status,
+    )
 
 
 class DecayedBetaEstimator:
