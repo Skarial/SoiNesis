@@ -65,6 +65,12 @@ from soinesis.experiments.p3.replication_manifest import (
 from soinesis.experiments.p3.replication_manifest_sqlite import (
     SQLiteExperimentalReplicationManifestRepository,
 )
+from soinesis.experiments.p3.replication_runner import (
+    ExperimentalReplicationRunner,
+    ExperimentalReplicationRunnerError,
+    ExperimentalReplicationRunnerIntegrityError,
+    ExperimentalReplicationRunResult,
+)
 from soinesis.experiments.p3.runner import (
     ExperimentalCycleRunner,
     ExperimentalCycleRunnerError,
@@ -120,6 +126,10 @@ __all__ = (
     "ExperimentalReplicationPlan",
     "ExperimentalReplicationPlanGenerator",
     "ExperimentalReplicationPlanIdentity",
+    "ExperimentalReplicationRunResult",
+    "ExperimentalReplicationRunner",
+    "ExperimentalReplicationRunnerError",
+    "ExperimentalReplicationRunnerIntegrityError",
     "ExperimentalTrialContextMismatchError",
     "ExperimentalTrialOutcome",
     "ExperimentalTrialOutcomeResolver",
