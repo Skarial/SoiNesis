@@ -28,6 +28,14 @@ from soinesis.experiments.p3.plan import (
     ExperimentalReplicationPlan,
     InvalidExperimentalReplicationPlanError,
 )
+from soinesis.experiments.p3.runner import (
+    ExperimentalCycleRunner,
+    ExperimentalCycleRunnerError,
+    ExperimentalCycleRunnerIntegrityError,
+    ExperimentalCycleRunResult,
+    ExperimentalCycleStartContext,
+    ExperimentalCycleStartContextRequiredError,
+)
 from soinesis.experiments.p3.schedule import (
     ExperimentalCapabilitySchedule,
     InvalidExperimentalCapabilityScheduleError,
@@ -44,6 +52,12 @@ __all__ = (
     "ExperimentalCycleCheckpointRepository",
     "ExperimentalCycleCheckpointService",
     "ExperimentalCycleCheckpointStatus",
+    "ExperimentalCycleRunResult",
+    "ExperimentalCycleRunner",
+    "ExperimentalCycleRunnerError",
+    "ExperimentalCycleRunnerIntegrityError",
+    "ExperimentalCycleStartContext",
+    "ExperimentalCycleStartContextRequiredError",
     "ExperimentalPlanPerformanceMismatchError",
     "ExperimentalReplicationPlan",
     "ExperimentalReplicationPlanGenerator",
