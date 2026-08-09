@@ -29,6 +29,18 @@ from soinesis.experiments.p3.condition_config import (
 from soinesis.experiments.p3.condition_config_sqlite import (
     SQLiteExperimentalExecutionConditionConfigurationRepository,
 )
+from soinesis.experiments.p3.condition_runtime import (
+    P3_PUBLIC_CAPABILITY_KEYS,
+    ExperimentalAgentCognitiveState,
+    ExperimentalAgentCognitiveStateInspector,
+    ExperimentalConditionRuntime,
+    ExperimentalConditionRuntimeComposer,
+    ExperimentalConditionRuntimeError,
+    ExperimentalConditionRuntimeIntegrityError,
+)
+from soinesis.experiments.p3.condition_state_sqlite import (
+    SQLiteExperimentalAgentCognitiveStateInspector,
+)
 from soinesis.experiments.p3.execution_binding import (
     ExperimentalExecutionPlanBinding,
     ExperimentalExecutionPlanBindingError,
@@ -97,12 +109,19 @@ from soinesis.experiments.p3.schedule import (
 )
 
 __all__ = (
+    "P3_PUBLIC_CAPABILITY_KEYS",
+    "ExperimentalAgentCognitiveState",
+    "ExperimentalAgentCognitiveStateInspector",
     "ExperimentalCapabilityModule",
     "ExperimentalCapabilitySchedule",
     "ExperimentalCondition",
     "ExperimentalConditionConfiguration",
     "ExperimentalConditionConfigurationError",
     "ExperimentalConditionConfigurationIntegrityError",
+    "ExperimentalConditionRuntime",
+    "ExperimentalConditionRuntimeComposer",
+    "ExperimentalConditionRuntimeError",
+    "ExperimentalConditionRuntimeIntegrityError",
     "ExperimentalCycleCheckpoint",
     "ExperimentalCycleCheckpointError",
     "ExperimentalCycleCheckpointIntegrityError",
@@ -154,6 +173,7 @@ __all__ = (
     "ExperimentalTrialOutcomeResolver",
     "InvalidExperimentalCapabilityScheduleError",
     "InvalidExperimentalReplicationPlanError",
+    "SQLiteExperimentalAgentCognitiveStateInspector",
     "SQLiteExperimentalCycleCheckpointRepository",
     "SQLiteExperimentalExecutionConditionConfigurationRepository",
     "SQLiteExperimentalExecutionGenerationProvenanceRepository",
