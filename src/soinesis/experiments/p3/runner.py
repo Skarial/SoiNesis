@@ -16,8 +16,14 @@ from soinesis.experiments.p3.checkpoint import (
     ExperimentalCycleCheckpoint,
     ExperimentalCycleCheckpointStatus,
 )
+from soinesis.experiments.p3.execution_binding import (
+    ExperimentalExecutionPlanBinding,
+)
 from soinesis.experiments.p3.outcome import ExperimentalTrialOutcome
-from soinesis.experiments.p3.plan import ExperimentalReplicationPlan
+from soinesis.experiments.p3.plan import (
+    ExperimentalReplicationPlan,
+    ExperimentalReplicationPlanIdentity,
+)
 
 
 class ExperimentalCycleStartContext(BaseModel):
@@ -135,6 +141,17 @@ class _ExperimentalCycleCheckpointService(Protocol):
     ) -> ExperimentalCycleCheckpoint: ...
 
 
+class _ExperimentalExecutionPlanBindingService(Protocol):
+    def get(self, *, execution_id: str) -> ExperimentalExecutionPlanBinding | None: ...
+
+    def bind(
+        self,
+        *,
+        execution_id: str,
+        plan_identity: ExperimentalReplicationPlanIdentity,
+    ) -> ExperimentalExecutionPlanBinding: ...
+
+
 class ExperimentalCycleRunner:
     """Exécuter ou reprendre un cycle sans jamais recalculer sa décision figée."""
 
@@ -143,12 +160,14 @@ class ExperimentalCycleRunner:
         *,
         plan: ExperimentalReplicationPlan,
         checkpoint_service: _ExperimentalCycleCheckpointService,
+        execution_plan_binding_service: _ExperimentalExecutionPlanBindingService,
         decision_service: _CapabilityDecisionService,
         recording_service: _CapabilityPerformanceRecordingService,
         post_performance_processor: _PostPerformanceProcessor | None = None,
     ) -> None:
         self._plan = plan
         self._checkpoint_service = checkpoint_service
+        self._execution_plan_binding_service = execution_plan_binding_service
         self._decision_service = decision_service
         self._recording_service = recording_service
         self._post_performance_processor = post_performance_processor
@@ -164,6 +183,10 @@ class ExperimentalCycleRunner:
         checkpoint = self._checkpoint_service.get(
             execution_id=execution_id,
             sequence_index=sequence_index,
+        )
+        self._validate_or_bind_plan(
+            execution_id=execution_id,
+            checkpoint=checkpoint,
         )
         if checkpoint is None:
             checkpoint = self._begin_new_cycle(
@@ -215,6 +238,28 @@ class ExperimentalCycleRunner:
             performance=performance,
             outcome=outcome,
         )
+
+    def _validate_or_bind_plan(
+        self,
+        *,
+        execution_id: str,
+        checkpoint: ExperimentalCycleCheckpoint | None,
+    ) -> None:
+        current_identity = self._plan.identity()
+        binding = self._execution_plan_binding_service.get(execution_id=execution_id)
+        if binding is None:
+            if checkpoint is not None:
+                raise ExperimentalCycleRunnerIntegrityError(
+                    "Un checkpoint existant doit posséder une liaison de plan antérieure."
+                )
+            binding = self._execution_plan_binding_service.bind(
+                execution_id=execution_id,
+                plan_identity=current_identity,
+            )
+        if binding.plan_identity != current_identity:
+            raise ExperimentalCycleRunnerIntegrityError(
+                "L'exécution est liée à un autre plan expérimental."
+            )
 
     def _begin_new_cycle(
         self,

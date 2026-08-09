@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
+from hashlib import sha256
+from struct import pack
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from soinesis.domain.capabilities import (
     CapabilityDecision,
@@ -20,6 +25,16 @@ from soinesis.experiments.p3.outcome import (
 from soinesis.experiments.p3.schedule import ExperimentalCapabilitySchedule
 
 _TOTAL_CYCLES = 180
+_PLAN_FINGERPRINT_SCHEME = "p3-plan-fingerprint-v1"
+
+
+class ExperimentalReplicationPlanIdentity(BaseModel):
+    """Identité cryptographique du contenu validé d'un plan P3 DEV."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    scheme: Literal["p3-plan-fingerprint-v1"]
+    fingerprint: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
 
 
 class InvalidExperimentalReplicationPlanError(ValueError):
@@ -57,6 +72,11 @@ class ExperimentalReplicationPlan:
         self._u_correction_by_sequence = tuple(
             validate_correction_latent(latent) for latent in copied_correction_latents
         )
+        self._identity = self._compute_identity()
+
+    def identity(self) -> ExperimentalReplicationPlanIdentity:
+        """Exposer uniquement le digest du contenu privé validé du plan."""
+        return self._identity
 
     def capability_key_for_sequence(self, sequence_index: int) -> str:
         """Déléguer l'exposition de la seule capacité courante au calendrier privé."""
@@ -111,4 +131,21 @@ class ExperimentalReplicationPlan:
             decision=decision,
             performance=performance,
             u_correction=u_correction,
+        )
+
+    def _compute_identity(self) -> ExperimentalReplicationPlanIdentity:
+        digest = sha256()
+        digest.update(_PLAN_FINGERPRINT_SCHEME.encode("ascii"))
+        digest.update(b"\0")
+        for sequence_index in range(_TOTAL_CYCLES):
+            capability_bytes = self._schedule.capability_key_for_sequence(sequence_index).encode(
+                "ascii"
+            )
+            digest.update(pack(">H", len(capability_bytes)))
+            digest.update(capability_bytes)
+            digest.update(pack(">d", self._u_intrinsic_by_sequence[sequence_index]))
+            digest.update(pack(">d", self._u_correction_by_sequence[sequence_index]))
+        return ExperimentalReplicationPlanIdentity(
+            scheme=_PLAN_FINGERPRINT_SCHEME,
+            fingerprint=digest.hexdigest(),
         )

@@ -17,6 +17,16 @@ from soinesis.experiments.p3.checkpoint import (
 from soinesis.experiments.p3.checkpoint_sqlite import (
     SQLiteExperimentalCycleCheckpointRepository,
 )
+from soinesis.experiments.p3.execution_binding import (
+    ExperimentalExecutionPlanBinding,
+    ExperimentalExecutionPlanBindingError,
+    ExperimentalExecutionPlanBindingIntegrityError,
+    ExperimentalExecutionPlanBindingRepository,
+    ExperimentalExecutionPlanBindingService,
+)
+from soinesis.experiments.p3.execution_binding_sqlite import (
+    SQLiteExperimentalExecutionPlanBindingRepository,
+)
 from soinesis.experiments.p3.generation import ExperimentalReplicationPlanGenerator
 from soinesis.experiments.p3.outcome import (
     ExperimentalTrialContextMismatchError,
@@ -26,6 +36,7 @@ from soinesis.experiments.p3.outcome import (
 from soinesis.experiments.p3.plan import (
     ExperimentalPlanPerformanceMismatchError,
     ExperimentalReplicationPlan,
+    ExperimentalReplicationPlanIdentity,
     InvalidExperimentalReplicationPlanError,
 )
 from soinesis.experiments.p3.runner import (
@@ -58,14 +69,21 @@ __all__ = (
     "ExperimentalCycleRunnerIntegrityError",
     "ExperimentalCycleStartContext",
     "ExperimentalCycleStartContextRequiredError",
+    "ExperimentalExecutionPlanBinding",
+    "ExperimentalExecutionPlanBindingError",
+    "ExperimentalExecutionPlanBindingIntegrityError",
+    "ExperimentalExecutionPlanBindingRepository",
+    "ExperimentalExecutionPlanBindingService",
     "ExperimentalPlanPerformanceMismatchError",
     "ExperimentalReplicationPlan",
     "ExperimentalReplicationPlanGenerator",
+    "ExperimentalReplicationPlanIdentity",
     "ExperimentalTrialContextMismatchError",
     "ExperimentalTrialOutcome",
     "ExperimentalTrialOutcomeResolver",
     "InvalidExperimentalCapabilityScheduleError",
     "InvalidExperimentalReplicationPlanError",
     "SQLiteExperimentalCycleCheckpointRepository",
+    "SQLiteExperimentalExecutionPlanBindingRepository",
     "UnknownExperimentalCapabilityError",
 )

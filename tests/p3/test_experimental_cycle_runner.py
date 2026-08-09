@@ -26,9 +26,13 @@ from soinesis.experiments.p3 import (
     ExperimentalCycleRunResult,
     ExperimentalCycleStartContext,
     ExperimentalCycleStartContextRequiredError,
+    ExperimentalExecutionPlanBinding,
+    ExperimentalExecutionPlanBindingService,
     ExperimentalReplicationPlan,
+    ExperimentalReplicationPlanIdentity,
     ExperimentalTrialOutcome,
     SQLiteExperimentalCycleCheckpointRepository,
+    SQLiteExperimentalExecutionPlanBindingRepository,
 )
 from soinesis.infrastructure.sqlite import SQLiteCapabilityUnitOfWorkFactory, SQLiteDatabase
 
@@ -41,12 +45,16 @@ class ExpectedTestError(RuntimeError):
 
 
 def build_plan(
-    *, log: list[str] | None = None, outcome_error: Exception | None = None
+    *,
+    log: list[str] | None = None,
+    outcome_error: Exception | None = None,
+    intrinsic_latents: list[float] | None = None,
+    correction_latents: list[float] | None = None,
 ) -> LoggingPlan:
     return LoggingPlan(
         capability_order=CAPABILITY_BLOCK * 3,
-        u_intrinsic_by_sequence=[0.25] * 180,
-        u_correction_by_sequence=[0.75] * 180,
+        u_intrinsic_by_sequence=intrinsic_latents or [0.25] * 180,
+        u_correction_by_sequence=correction_latents or [0.75] * 180,
         log=log if log is not None else [],
         outcome_error=outcome_error,
     )
@@ -188,6 +196,33 @@ class CheckpointServiceProbe:
         return self.delegate.complete(execution_id=execution_id, sequence_index=sequence_index)
 
 
+class BindingServiceProbe:
+    def __init__(
+        self,
+        *,
+        delegate: ExperimentalExecutionPlanBindingService,
+        log: list[str],
+    ) -> None:
+        self.delegate = delegate
+        self.log = log
+
+    def get(self, *, execution_id: str) -> ExperimentalExecutionPlanBinding | None:
+        self.log.append("binding.get")
+        return self.delegate.get(execution_id=execution_id)
+
+    def bind(
+        self,
+        *,
+        execution_id: str,
+        plan_identity: ExperimentalReplicationPlanIdentity,
+    ) -> ExperimentalExecutionPlanBinding:
+        self.log.append("binding.bind")
+        return self.delegate.bind(
+            execution_id=execution_id,
+            plan_identity=plan_identity,
+        )
+
+
 class RecordingServiceProbe:
     def __init__(
         self,
@@ -236,6 +271,7 @@ class RunnerHarness:
     database: SQLiteDatabase
     checkpoint_repository: SQLiteExperimentalCycleCheckpointRepository
     checkpoint_service: ExperimentalCycleCheckpointService
+    binding_service: ExperimentalExecutionPlanBindingService
     plan: LoggingPlan
     decision: DecisionServiceProbe
     recording: RecordingServiceProbe
@@ -251,6 +287,7 @@ def build_harness(
     recording_error: Exception | None = None,
     outcome_error: Exception | None = None,
     post: PostProcessorProbe | None = None,
+    plan: LoggingPlan | None = None,
 ) -> RunnerHarness:
     operation_log = log if log is not None else []
     database = SQLiteDatabase(path)
@@ -258,10 +295,13 @@ def build_harness(
     checkpoint_repository = SQLiteExperimentalCycleCheckpointRepository(database)
     checkpoint_repository.initialize_schema()
     checkpoint_service = ExperimentalCycleCheckpointService(checkpoint_repository)
+    binding_repository = SQLiteExperimentalExecutionPlanBindingRepository(database)
+    binding_repository.initialize_schema()
+    binding_service = ExperimentalExecutionPlanBindingService(binding_repository)
     recording_delegate = CapabilityPerformanceRecordingService(
         unit_of_work_factory=SQLiteCapabilityUnitOfWorkFactory(database)
     )
-    plan = build_plan(log=operation_log, outcome_error=outcome_error)
+    selected_plan = plan or build_plan(log=operation_log, outcome_error=outcome_error)
     decision = DecisionServiceProbe(log=operation_log, error=decision_error)
     recording = RecordingServiceProbe(
         delegate=recording_delegate,
@@ -269,9 +309,13 @@ def build_harness(
         error=recording_error,
     )
     runner = ExperimentalCycleRunner(
-        plan=plan,
+        plan=selected_plan,
         checkpoint_service=CheckpointServiceProbe(
             delegate=checkpoint_service,
+            log=operation_log,
+        ),
+        execution_plan_binding_service=BindingServiceProbe(
+            delegate=binding_service,
             log=operation_log,
         ),
         decision_service=decision,
@@ -282,7 +326,8 @@ def build_harness(
         database=database,
         checkpoint_repository=checkpoint_repository,
         checkpoint_service=checkpoint_service,
-        plan=plan,
+        binding_service=binding_service,
+        plan=selected_plan,
         decision=decision,
         recording=recording,
         post=post,
@@ -313,6 +358,8 @@ def test_new_cycle_has_the_exact_causal_order_and_minimal_inputs(tmp_path: Path)
 
     assert log == [
         "checkpoint.get",
+        "binding.get",
+        "binding.bind",
         "decision.decide",
         "checkpoint.begin",
         "plan.attempt",
@@ -360,7 +407,12 @@ def test_completed_retry_is_stable_and_has_no_cognitive_or_persistent_effect(
     )
 
     assert result_2 == result_1
-    assert log == ["checkpoint.get", "plan.attempt", "plan.resolve_outcome"]
+    assert log == [
+        "checkpoint.get",
+        "binding.get",
+        "plan.attempt",
+        "plan.resolve_outcome",
+    ]
     assert len(harness.decision.boundaries) == decision_calls
     assert len(harness.recording.observations) == recording_calls
     assert len(post.performance_ids) == post_calls
@@ -429,6 +481,7 @@ def test_crash_after_record_reuses_frozen_decision_and_completes_on_retry(
 
     assert retry_log == [
         "checkpoint.get",
+        "binding.get",
         "plan.attempt",
         "plan.resolve_outcome",
         "recording.record",
@@ -501,8 +554,155 @@ def test_new_cycle_without_start_context_is_refused_after_checkpoint_get(tmp_pat
     with pytest.raises(ExperimentalCycleStartContextRequiredError):
         harness.runner.run(execution_id="execution-1", sequence_index=0)
 
-    assert log == ["checkpoint.get"]
+    assert log == ["checkpoint.get", "binding.get", "binding.bind"]
     assert harness.decision.boundaries == []
+
+
+def test_crash_after_binding_before_checkpoint_can_resume_with_the_same_plan(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "binding-before-checkpoint.db"
+    bootstrap = build_harness(path)
+    bootstrap.binding_service.bind(
+        execution_id="execution-1",
+        plan_identity=bootstrap.plan.identity(),
+    )
+    assert bootstrap.checkpoint_service.get(execution_id="execution-1", sequence_index=0) is None
+    log: list[str] = []
+    retry = build_harness(path, log=log)
+
+    result = retry.runner.run(
+        execution_id="execution-1",
+        sequence_index=0,
+        start_context=build_context(),
+    )
+
+    assert log[:3] == ["checkpoint.get", "binding.get", "decision.decide"]
+    assert "binding.bind" not in log
+    assert result.checkpoint.status is ExperimentalCycleCheckpointStatus.COMPLETED
+
+
+@pytest.mark.parametrize("changed_latent", ("intrinsic", "correction"))
+def test_binding_rejects_same_current_capability_with_a_different_private_latent(
+    tmp_path: Path,
+    changed_latent: str,
+) -> None:
+    path = tmp_path / f"latent-mismatch-{changed_latent}.db"
+    bootstrap = build_harness(path)
+    bootstrap.binding_service.bind(
+        execution_id="execution-1",
+        plan_identity=bootstrap.plan.identity(),
+    )
+    intrinsic = [0.25] * 180
+    correction = [0.75] * 180
+    if changed_latent == "intrinsic":
+        intrinsic[0] = 0.95
+    else:
+        correction[0] = 0.95
+    log: list[str] = []
+    changed_plan = build_plan(
+        log=log,
+        intrinsic_latents=intrinsic,
+        correction_latents=correction,
+    )
+    retry = build_harness(path, log=log, plan=changed_plan)
+
+    with pytest.raises(ExperimentalCycleRunnerIntegrityError):
+        retry.runner.run(
+            execution_id="execution-1",
+            sequence_index=0,
+            start_context=build_context(),
+        )
+
+    assert changed_plan.capability_key_for_sequence(0) == "ALPHA"
+    assert log == ["checkpoint.get", "binding.get"]
+    assert retry.decision.boundaries == []
+    assert retry.recording.observations == []
+    assert retry.checkpoint_service.get(execution_id="execution-1", sequence_index=0) is None
+
+
+@pytest.mark.parametrize("changed_latent", ("intrinsic", "correction"))
+def test_started_checkpoint_rejects_same_capability_with_a_different_private_latent(
+    tmp_path: Path,
+    changed_latent: str,
+) -> None:
+    path = tmp_path / f"started-latent-mismatch-{changed_latent}.db"
+    failing_post = PostProcessorProbe(
+        log=[],
+        error=ExpectedTestError("keep checkpoint started"),
+    )
+    first = build_harness(path, post=failing_post)
+    with pytest.raises(ExpectedTestError, match="keep checkpoint started"):
+        first.runner.run(
+            execution_id="execution-1",
+            sequence_index=0,
+            start_context=build_context(),
+        )
+    started = first.checkpoint_service.get(execution_id="execution-1", sequence_index=0)
+    assert started is not None
+    assert started.status is ExperimentalCycleCheckpointStatus.STARTED
+
+    intrinsic = [0.25] * 180
+    correction = [0.75] * 180
+    if changed_latent == "intrinsic":
+        intrinsic[0] = 0.95
+    else:
+        correction[0] = 0.95
+    log: list[str] = []
+    changed_plan = build_plan(
+        log=log,
+        intrinsic_latents=intrinsic,
+        correction_latents=correction,
+    )
+    retry = build_harness(path, log=log, plan=changed_plan)
+
+    with pytest.raises(ExperimentalCycleRunnerIntegrityError):
+        retry.runner.run(execution_id="execution-1", sequence_index=0)
+
+    assert changed_plan.capability_key_for_sequence(0) == started.capability_key == "ALPHA"
+    assert log == ["checkpoint.get", "binding.get"]
+    assert retry.decision.boundaries == []
+    assert retry.recording.observations == []
+
+
+def test_existing_pre_binding_checkpoint_is_refused_without_retroactive_binding(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "checkpoint-without-binding.db"
+    database = SQLiteDatabase(path)
+    database.initialize_capability_schema()
+    checkpoint_repository = SQLiteExperimentalCycleCheckpointRepository(database)
+    checkpoint_repository.initialize_schema()
+    checkpoint_service = ExperimentalCycleCheckpointService(checkpoint_repository)
+    boundary = CapabilityHistoryBoundary(
+        agent_id="agent-1",
+        capability_key="ALPHA",
+        trial_id="trial-0",
+        cycle_id="cycle-0",
+        sequence_index=0,
+    )
+    decision = DecisionServiceProbe(log=[]).decide(boundary=boundary)
+    checkpoint_service.begin(
+        execution_id="execution-1",
+        sequence_index=0,
+        performance_id="performance-0",
+        agent_id="agent-1",
+        trial_id="trial-0",
+        cycle_id="cycle-0",
+        capability_key="ALPHA",
+        observed_at=OBSERVED_AT,
+        decision=decision,
+    )
+    log: list[str] = []
+    harness = build_harness(path, log=log)
+
+    with pytest.raises(ExperimentalCycleRunnerIntegrityError, match="liaison"):
+        harness.runner.run(execution_id="execution-1", sequence_index=0)
+
+    assert log == ["checkpoint.get", "binding.get"]
+    assert harness.binding_service.get(execution_id="execution-1") is None
+    assert harness.decision.boundaries == []
+    assert harness.recording.observations == []
 
 
 @pytest.mark.parametrize(
@@ -562,6 +762,10 @@ def test_retry_refuses_a_different_plan_before_attempt_or_cognitive_effects(tmp_
     runner = ExperimentalCycleRunner(
         plan=mismatched_plan,
         checkpoint_service=CheckpointServiceProbe(delegate=first.checkpoint_service, log=log),
+        execution_plan_binding_service=BindingServiceProbe(
+            delegate=first.binding_service,
+            log=log,
+        ),
         decision_service=decision,
         recording_service=recording,
     )
@@ -569,7 +773,7 @@ def test_retry_refuses_a_different_plan_before_attempt_or_cognitive_effects(tmp_
     with pytest.raises(ExperimentalCycleRunnerIntegrityError):
         runner.run(execution_id="execution-1", sequence_index=0)
 
-    assert log == ["checkpoint.get"]
+    assert log == ["checkpoint.get", "binding.get"]
     assert decision.boundaries == []
     assert recording.observations == []
 

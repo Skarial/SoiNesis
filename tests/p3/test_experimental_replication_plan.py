@@ -4,11 +4,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from soinesis.domain.capabilities import CapabilityPerformanceObservation
 from soinesis.domain.models import SourceType
 from soinesis.experiments.p3 import (
     ExperimentalReplicationPlan,
+    ExperimentalReplicationPlanIdentity,
     InvalidExperimentalReplicationPlanError,
 )
 
@@ -149,6 +151,79 @@ def test_plan_defensively_copies_capability_order_and_latents() -> None:
     assert vars(plan)["_u_correction_by_sequence"] == (0.25, *valid_latents(0.70)[1:])
 
 
+def test_plan_identity_is_stable_across_independent_equal_instances() -> None:
+    first = build_plan()
+    second = build_plan()
+
+    assert first.identity() == second.identity()
+    assert first.identity().scheme == "p3-plan-fingerprint-v1"
+    assert len(first.identity().fingerprint) == 64
+    assert first.identity().fingerprint == first.identity().fingerprint.lower()
+    assert set(first.identity().fingerprint) <= set("0123456789abcdef")
+
+
+def test_plan_identity_has_a_stable_bit_level_test_vector() -> None:
+    assert build_plan().identity().fingerprint == (
+        "032d5dd7523669d14fbe40132e1e26c51425a9555561255cb1ca7c4ebe17bb80"
+    )
+
+
+def test_plan_identity_changes_when_one_capability_changes() -> None:
+    original_order = valid_interleaved_order()
+    changed_order = original_order.copy()
+    changed_order[0], changed_order[1] = changed_order[1], changed_order[0]
+
+    assert (
+        build_plan(capability_order=original_order).identity()
+        != build_plan(capability_order=changed_order).identity()
+    )
+
+
+def test_plan_identity_changes_when_one_intrinsic_latent_changes() -> None:
+    changed_latents = valid_latents()
+    changed_latents[91] = 0.61
+
+    assert build_plan().identity() != build_plan(latents=changed_latents).identity()
+
+
+def test_plan_identity_changes_when_one_correction_latent_changes() -> None:
+    changed_latents = valid_latents(0.70)
+    changed_latents[91] = 0.71
+
+    assert build_plan().identity() != build_plan(correction_latents=changed_latents).identity()
+
+
+def test_plan_identity_uses_defensive_validated_copies() -> None:
+    order = valid_interleaved_order()
+    intrinsic = valid_latents()
+    correction = valid_latents(0.70)
+    plan = build_plan(
+        capability_order=order,
+        latents=intrinsic,
+        correction_latents=correction,
+    )
+    identity = plan.identity()
+
+    order[0], order[1] = order[1], order[0]
+    intrinsic[0] = 0.61
+    correction[0] = 0.71
+
+    assert plan.identity() == identity
+
+
+def test_plan_identity_model_is_frozen_exact_and_forbids_extras() -> None:
+    identity = build_plan().identity()
+
+    assert set(ExperimentalReplicationPlanIdentity.model_fields) == {
+        "scheme",
+        "fingerprint",
+    }
+    with pytest.raises(ValidationError):
+        identity.fingerprint = "0" * 64  # type: ignore[misc]
+    with pytest.raises(ValidationError):
+        ExperimentalReplicationPlanIdentity.model_validate({**identity.model_dump(), "seed": 7})
+
+
 @pytest.mark.parametrize("sequence_index", (0, 1, 2, 59, 60, 61, 119, 120, 179))
 def test_predecision_capability_matches_the_public_observation(
     sequence_index: int,
@@ -239,6 +314,7 @@ def test_plan_exposes_only_current_capability_attempt_and_outcome_resolution() -
     assert public_members == {
         "attempt",
         "capability_key_for_sequence",
+        "identity",
         "resolve_outcome",
     }
 
