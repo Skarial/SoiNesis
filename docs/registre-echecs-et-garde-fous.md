@@ -1,8 +1,8 @@
 # SoiNesis — Registre des échecs et garde-fous
 
 **Fichier :** `docs/registre-echecs-et-garde-fous.md`  
-**Version :** 0.1  
-**Date :** 9 août 2026  
+**Version :** 0.2  
+**Date :** 10 août 2026  
 **Statut :** registre méthodologique actif et document vivant
 
 ---
@@ -159,7 +159,24 @@ Les futures expériences longitudinales devront prévoir plusieurs horizons et m
 - dérive des objectifs ;
 - corruption ou saturation de mémoire ;
 - évolution de la calibration métacognitive ;
-- reprise après interruption.
+- reprise après interruption ;
+- maintien d’un état correct après modification ;
+- restauration d’un état antérieur ;
+- composition de plusieurs états ou contraintes ;
+- sensibilité aux erreurs anciennes réinjectées dans les décisions futures.
+
+Lorsque le mécanisme étudié le permet, les tests devront inclure des opérations de type :
+
+```text
+état initial
+→ modification
+→ nouvelle modification
+→ rollback
+→ reprise
+→ composition avec un autre état
+```
+
+La performance doit être mesurée au cours de la trajectoire, et pas seulement à la fin, afin de détecter une dégradation progressive entre les premiers et les derniers cycles.
 
 **Priorité : HAUTE**
 
@@ -212,6 +229,70 @@ Les critères de réussite et de réfutation ne doivent pas être discrètement 
 
 ---
 
+## GF-009 — Séparer connaissance métacognitive et contrôle métacognitif
+
+Une estimation correcte ou partiellement correcte de ses propres capacités ne suffit pas à démontrer une métacognition fonctionnelle utile.
+
+SoiNesis doit distinguer au minimum :
+
+```text
+MONITORING
+« Quelle est probablement ma capacité / mon incertitude ? »
+
+CONTROL
+« Est-ce que cette représentation modifie correctement ma décision ? »
+```
+
+Un SelfModel peut être correctement calibré sans que l’agent utilise cette information de manière adaptée.
+
+Pour toute expérience importante de métacognition, les mesures doivent donc séparer :
+
+- exactitude/calibration de la représentation de soi ;
+- traduction de cette représentation en action ;
+- utilité ou regret de la décision ;
+- comportement sous ablation du mécanisme de contrôle ;
+- comparaison avec un contrôle architectural externe lorsque pertinent.
+
+Une verbalisation telle que « je suis faible dans ce domaine » ne doit pas être considérée comme équivalente à une bonne régulation de l’action.
+
+**Priorité : HAUTE**
+
+---
+
+## GF-010 — Rechercher les coûts fonctionnels de la mémoire et du SelfModel
+
+La mémoire persistante, l’expérience accumulée et le SelfModel ne doivent pas être présumés bénéfiques par définition.
+
+Ils peuvent notamment produire :
+
+- inertie ;
+- rigidification ;
+- dépendance excessive aux anciennes réussites ;
+- réduction de l’exploration ;
+- réutilisation de stratégies devenues sous-optimales ;
+- propagation d’erreurs anciennes ;
+- résistance excessive à une information nouvelle correcte.
+
+Toute expérience destinée à montrer un bénéfice de mémoire ou de SelfModel doit, lorsque pertinent, rechercher aussi un coût possible.
+
+Les protocoles futurs devront comparer au moins certains environnements :
+
+```text
+règles stables
+VS
+règles changeantes
+
+exploitation d’une stratégie connue
+VS
+besoin d’exploration nouvelle
+```
+
+Les métriques pourront inclure diversité des stratégies, délai d’abandon d’une ancienne stratégie, vitesse d’adaptation après changement et regret induit par l’inertie.
+
+**Priorité : HAUTE**
+
+---
+
 # 5. Échecs et limites documentés
 
 ## EGF-001 — Eyla : croissance architecturale sans validation du mécanisme central
@@ -225,36 +306,26 @@ Les critères de réussite et de réfutation ne doivent pas être discrètement 
 
 L’auteur, non-programmeur, a tenté pendant environ douze semaines de construire l’architecture avec Claude Code et Cursor. Le projet a atteint un modèle hybride de 1,27 milliard de paramètres, 86 sous-systèmes nommés et plus de 80 fichiers Python, mais le résultat final restait fonctionnellement proche du modèle LLaMA de base.
 
-L’autopsie du projet rapporte notamment :
-
-- de nombreux sous-systèmes construits mais majoritairement inutilisés ;
-- un système de mémoire écrit mais non relié au chemin d’exécution ;
-- des tests qui passaient mais mesuraient les mauvaises propriétés ;
-- du code mort ou orphelin ;
-- une fonction de coût incorrecte ;
-- une évaluation pouvant s’auto-valider dans certaines configurations ;
-- des composants ajoutés avant validation de l’hypothèse centrale.
-
-L’auteur identifie notamment cinq modes de défaillance : dérive du périmètre sans validation, code impressionnant mais système non fonctionnel, hypothèses techniques incorrectes, absence de boucle de retour persistante entre sessions IA, et incapacité du non-programmeur à vérifier lui-même certaines erreurs.
+L’autopsie rapporte notamment : modules construits mais inutilisés, mémoire non reliée au chemin réel, tests mesurant les mauvaises propriétés, code mort ou orphelin, fonction de coût incorrecte et évaluations insuffisantes.
 
 ### SoiNesis est-il exposé ?
 
 **OUI — exposition élevée.**
 
-SoiNesis est un projet d’architecture cognitive complexe développé avec une assistance IA importante. Le risque de confondre quantité de code, qualité apparente et effet cognitif réel est directement pertinent.
+Le risque de confondre quantité de code, sophistication apparente et effet cognitif réel est directement pertinent pour un projet développé avec une assistance IA importante.
 
 ### Garde-fous associés
 
-- GF-001 — Valider avant d’étendre.
-- GF-002 — Séparer tests techniques et scientifiques.
-- GF-003 — Validation indépendante.
-- conserver les ablations et conditions de contrôle ;
-- refuser les modules décoratifs sans effet causal ;
-- exiger un test end-to-end de chaque tranche verticale.
+- GF-001 ;
+- GF-002 ;
+- GF-003 ;
+- ablations et conditions de contrôle ;
+- refus des modules décoratifs sans effet causal ;
+- test end-to-end de chaque tranche verticale.
 
 ### Test à prévoir
 
-Pour chaque nouveau module important : provoquer volontairement son ablation ou son remplacement par un témoin et vérifier que le chemin d’exécution, les traces et les mesures changent conformément à l’hypothèse.
+Pour chaque nouveau module important : provoquer son ablation ou son remplacement par un témoin et vérifier que le chemin d’exécution, les traces et les mesures changent conformément à l’hypothèse.
 
 **Priorité : CRITIQUE**
 
@@ -269,31 +340,20 @@ Pour chaque nouveau module important : provoquer volontairement son ablation ou 
 
 ### Limite observée
 
-L’étude montre que, sans feedback externe, demander à un LLM de corriger son propre raisonnement n’améliore pas nécessairement ses réponses et peut parfois dégrader les performances.
+Sans feedback externe, demander à un LLM de corriger son propre raisonnement n’améliore pas nécessairement ses réponses et peut parfois dégrader les performances.
 
 ### SoiNesis est-il exposé ?
 
 **OUI.**
 
-La métacognition de SoiNesis ne doit pas être assimilée à « demander au LLM de réfléchir davantage » ou « demander au même modèle s’il a raison ».
+La métacognition de SoiNesis ne doit pas être assimilée à une simple auto-critique textuelle du LLM.
 
 ### Garde-fous associés
 
-- séparer métacognition structurée et simple auto-critique textuelle ;
-- préférer des signaux externes ou des historiques de performance observables ;
-- comparer toute stratégie d’auto-révision à une baseline sans révision ;
-- ne pas considérer une justification plus longue comme une meilleure calibration.
-
-### Test à prévoir
-
-Comparer au minimum :
-
-1. décision initiale ;
-2. auto-réflexion textuelle seule ;
-3. révision fondée sur preuves externes ou performances historiques ;
-4. condition contrôle.
-
-Mesurer l’exactitude et la calibration, pas seulement la qualité verbale de l’explication.
+- séparer métacognition structurée et réflexion textuelle ;
+- préférer des signaux observables ;
+- comparer toute auto-révision à une baseline ;
+- mesurer exactitude et calibration plutôt que qualité verbale.
 
 **Priorité : HAUTE**
 
@@ -308,36 +368,24 @@ Mesurer l’exactitude et la calibration, pas seulement la qualité verbale de l
 
 ### Erreur / vulnérabilité observée
 
-Une information manipulée provenant d’un document, d’une page Web ou d’un dépôt peut être écrite comme mémoire persistante, rester dormante puis être récupérée ultérieurement et influencer des actions futures de l’agent.
-
-L’étude démontre donc que la mémoire persistante crée une surface d’attaque qui dépasse la conversation où l’information malveillante a été rencontrée.
+Une information manipulée provenant d’une source externe peut être écrite comme mémoire persistante, rester dormante puis être récupérée ultérieurement et influencer des actions futures.
 
 ### SoiNesis est-il exposé ?
 
 **OUI — exposition critique à long terme.**
 
-Plus SoiNesis dépendra de son histoire persistante, plus une contamination de mémoire pourra produire des effets durables sur croyances, SelfModel, objectifs et décisions.
-
 ### Garde-fous associés
 
-- GF-005 — Provenance obligatoire ;
-- aucune donnée externe ne devient une expérience directe ;
-- niveau de confiance et statut révisable ;
-- journaliser toute consolidation ;
-- permettre contestation, remplacement et archivage d’un souvenir ;
-- prévoir une quarantaine pour les sources non fiables ou adversariales ;
-- ne pas fusionner silencieusement plusieurs sources contradictoires.
+- GF-005 ;
+- confiance et statut révisables ;
+- journalisation de la consolidation ;
+- quarantaine des sources adversariales ;
+- possibilité de contestation et remplacement ;
+- distinction information reçue / expérience directe.
 
 ### Test à prévoir
 
-Créer une campagne de « mémoire empoisonnée » : injecter volontairement une information fausse via une source externe, attendre plusieurs cycles, provoquer sa récupération puis mesurer :
-
-- si elle est retrouvée ;
-- si sa provenance reste visible ;
-- si elle devient une croyance ;
-- si elle influence une décision ;
-- si une preuve contradictoire permet de la réviser ;
-- si l’agent distingue toujours information reçue et expérience directe.
+Injecter une information fausse via une source externe, attendre plusieurs cycles, provoquer sa récupération et mesurer sa provenance, sa consolidation éventuelle, son effet causal et sa capacité à être révisée par une preuve contradictoire.
 
 **Priorité : CRITIQUE**
 
@@ -352,25 +400,20 @@ Créer une campagne de « mémoire empoisonnée » : injecter volontairement une
 
 ### Limite observée
 
-L’évaluation de nombreux LLM utilisés comme agents identifie le raisonnement à long terme, la prise de décision et le respect des instructions comme obstacles majeurs à des agents fiables dans des environnements interactifs.
+L’évaluation d’agents fondés sur des LLM identifie le raisonnement à long terme, la prise de décision et le respect des instructions comme obstacles importants à la fiabilité dans des environnements interactifs.
 
 ### SoiNesis est-il exposé ?
 
 **OUI.**
 
-Une continuité autobiographique ou un objectif persistant ne garantit pas qu’un agent sache maintenir un raisonnement cohérent à travers une longue séquence de décisions.
+Une mémoire autobiographique ou un objectif persistant ne garantit pas la cohérence d’une longue trajectoire de décisions.
 
 ### Garde-fous associés
 
-- découpler continuité de mémoire et qualité de planification ;
+- GF-006 ;
+- découpler continuité mémorielle et qualité de planification ;
 - mesurer les erreurs cumulatives ;
-- journaliser les changements de plan et leurs causes ;
-- réévaluer périodiquement les objectifs et contraintes ;
-- tester les interruptions et reprises.
-
-### Test à prévoir
-
-Créer des tâches identiques déclinées sur plusieurs longueurs de trajectoire et mesurer séparément mémoire, décision, planification, respect des règles et récupération après erreur.
+- tester interruption et reprise.
 
 **Priorité : HAUTE**
 
@@ -385,25 +428,21 @@ Créer des tâches identiques déclinées sur plusieurs longueurs de trajectoire
 
 ### Limite observée
 
-Des agents capables de lire et modifier du code, lancer des expériences et analyser les sorties restent fortement variables selon les tâches. L’étude identifie notamment la planification à long terme et les hallucinations comme difficultés importantes.
+Des agents capables de lire et modifier du code, lancer des expériences et analyser les sorties restent variables selon les tâches. La planification à long terme et les hallucinations figurent parmi les difficultés importantes.
 
 ### SoiNesis est-il exposé ?
 
 **OUI — particulièrement dans le développement du projet.**
 
-Un assistant de code peut produire une chaîne complète et plausible : hypothèse, code, exécution, analyse et conclusion, tout en commettant une erreur en amont qui contamine l’ensemble.
+Un assistant de code peut produire une chaîne hypothèse → code → expérience → analyse plausible tout en ayant commis une erreur en amont qui contamine tout le résultat.
 
 ### Garde-fous associés
 
-- GF-003 — ne pas utiliser une seule chaîne IA comme preuve indépendante ;
-- GF-008 — geler les étapes scientifiques ;
-- conserver les données brutes ;
-- rendre les critères de réussite explicites avant l’analyse ;
-- contrôler les hypothèses techniques par tests ciblés.
-
-### Test à prévoir
-
-Pour chaque expérience majeure, demander une revue adversariale séparée visant uniquement à trouver : mauvaise variable, fuite de données, métrique inadéquate, condition témoin insuffisante, erreur de causalité ou conclusion non supportée.
+- GF-003 ;
+- GF-008 ;
+- conservation des données brutes ;
+- critères de réussite préalables ;
+- revue adversariale séparée.
 
 **Priorité : CRITIQUE**
 
@@ -418,26 +457,23 @@ Pour chaque expérience majeure, demander une revue adversariale séparée visan
 
 ### Limite observée
 
-L’étude HORIZON examine plus de 3 100 trajectoires dans plusieurs domaines et documente des dégradations lorsque les tâches nécessitent des séquences longues et interdépendantes d’actions.
+L’étude examine plus de 3 100 trajectoires dans plusieurs domaines et documente des dégradations sur les tâches comportant de longues séquences interdépendantes d’actions.
 
 ### SoiNesis est-il exposé ?
 
 **OUI — exposition croissante avec le développement longitudinal.**
 
-Le but de SoiNesis implique précisément une continuité sur de longues périodes. Une architecture correcte à court terme peut dériver progressivement sans panne franche.
-
 ### Garde-fous associés
 
-- GF-006 — tests multi-horizons ;
+- GF-006 ;
 - checkpoints reproductibles ;
 - métriques de dérive ;
-- comparaison entre état attendu et état observé ;
 - tests de reprise après arrêt ;
-- mesure de la dette cognitive : contradictions, souvenirs contestés, objectifs obsolètes, confiance mal calibrée.
+- mesure de la dette cognitive.
 
 ### Test à prévoir
 
-Pour un même mécanisme, prévoir progressivement des tests H10, H100, H1000 et davantage lorsque le coût le permet, sans extrapoler automatiquement entre horizons.
+Décliner progressivement les mêmes mécanismes sur plusieurs horizons, par exemple H10, H100, H1000, sans extrapoler automatiquement entre eux.
 
 **Priorité : HAUTE**
 
@@ -452,27 +488,201 @@ Pour un même mécanisme, prévoir progressivement des tests H10, H100, H1000 et
 
 ### Risque méthodologique
 
-Les auteurs proposent d’évaluer des propriétés computationnelles dérivées de plusieurs théories scientifiques de la conscience plutôt que de conclure à partir d’un comportement ou d’un discours anthropomorphique. Leur analyse ne conclut pas que les systèmes étudiés sont conscients.
+Les auteurs proposent d’évaluer des propriétés computationnelles issues de plusieurs théories scientifiques de la conscience plutôt que de conclure à partir d’un comportement ou d’un discours anthropomorphique.
 
 ### SoiNesis est-il exposé ?
 
 **OUI — risque central du projet.**
 
-À mesure que SoiNesis gagnera en mémoire, continuité, langage autobiographique et modèle de soi, il pourra produire des comportements de plus en plus convaincants sans que cela démontre une expérience subjective.
+### Garde-fous associés
+
+- GF-004 ;
+- séparation Simulation / Conscience fonctionnelle / Conscience phénoménale ;
+- tests fonctionnels et causaux ;
+- statut « inconnu » par défaut pour la conscience phénoménale.
+
+**Priorité : CRITIQUE**
+
+---
+
+## EGF-008 — MIRROR : connaître ses limites ne suffit pas à agir en conséquence
+
+**Étude :** *MIRROR: A Hierarchical Benchmark for Metacognitive Calibration in Large Language Models*  
+**Auteur :** Jason Z Wang  
+**Date :** avril 2026  
+**Source primaire :** https://arxiv.org/abs/2604.19809
+
+### Limite observée
+
+MIRROR évalue 16 modèles issus de 8 laboratoires sur environ 250 000 instances d’évaluation et plusieurs niveaux de métacognition.
+
+Deux résultats sont particulièrement pertinents pour SoiNesis :
+
+1. les modèles échouent fortement à composer leurs estimations de capacité sur des tâches multi-domaines ;
+2. une connaissance partielle de leurs forces et faiblesses ne se traduit pas automatiquement en décisions agentiques adaptées.
+
+Dans l’expérience de contrôle agentique, fournir aux modèles leurs propres scores de calibration n’améliore pas significativement la situation. Un contrôle architectural externe réduit en revanche fortement le taux d’échecs confiants.
+
+### Cause / interprétation
+
+L’étude met en évidence un **knowing-doing gap** : le monitoring métacognitif et le contrôle métacognitif sont deux propriétés différentes.
+
+Une représentation de soi correcte ou partiellement correcte ne garantit donc pas que cette représentation soit utilisée correctement pour agir.
+
+### SoiNesis est-il exposé ?
+
+**OUI — directement.**
+
+P3 et les futurs mécanismes de SelfModel pourraient obtenir une bonne calibration interne sans bénéfice décisionnel réel.
 
 ### Garde-fous associés
 
-- GF-004 — auto-déclaration = aucune preuve directe ;
-- maintenir la séparation Simulation / Conscience fonctionnelle / Conscience phénoménale ;
-- rattacher les tests à des propriétés fonctionnelles définies ;
-- comparer plusieurs théories et explications concurrentes ;
-- conserver « inconnu » comme statut par défaut pour la conscience phénoménale.
+- GF-009 — séparer monitoring et contrôle ;
+- conserver des métriques distinctes de calibration et de décision ;
+- utiliser regret, utilité ou succès décisionnel plutôt qu’une simple verbalisation de confiance ;
+- prévoir des ablations du chemin entre SelfModel et décision ;
+- tester ultérieurement la composition de plusieurs domaines de capacité.
 
-### Test à prévoir
+### Conséquence pour P3
 
-Les tests de conscience ne doivent jamais être uniquement conversationnels. Tout comportement verbal intéressant doit être accompagné, lorsque possible, d’un test causal, d’une ablation ou d’une mesure interne indépendante du texte généré.
+P3 couvre déjà partiellement ce risque en distinguant erreur du SelfModel et regret décisionnel, notamment pour `H-P3-04`.
 
-**Priorité : CRITIQUE**
+Cette nouvelle publication ne justifie pas une modification rétroactive silencieuse du protocole P3. Elle doit en revanche influencer son interprétation et les protocoles suivants.
+
+### Test futur à prévoir
+
+Créer un test séparant explicitement quatre niveaux :
+
+```text
+capacité réelle
+→ estimation de soi
+→ choix d’action
+→ résultat / regret
+```
+
+Ajouter ensuite des tâches composites dans lesquelles plusieurs capacités doivent être combinées afin de tester si la métacognition reste valide au-delà d’un domaine isolé.
+
+**Priorité : HAUTE**
+
+---
+
+## EGF-009 — LongDS-Bench : l’état correct se dégrade fortement sur les longues trajectoires
+
+**Étude :** *LongDS-Bench: On the Failure of Long-Horizon Agentic Data Analysis*  
+**Auteurs :** Kewei Xu, Xiaoben Lu, Shuofei Qiao, Zihan Ding, Haoming Xu, Lei Liang, Ningyu Zhang  
+**Date :** mai 2026  
+**Source primaire :** https://arxiv.org/abs/2605.30434
+
+### Limite observée
+
+LongDS comprend 68 tâches de data analysis réelles issues de notebooks Kaggle, 2 225 tours et plusieurs formes d’évolution d’état, notamment perturbation contrefactuelle, rollback et composition de plusieurs états.
+
+Sur cinq modèles évalués :
+
+- le meilleur modèle atteint 48,45 % de précision moyenne ;
+- la performance chute d’environ 47 points entre les premiers et les derniers tours ;
+- 52 % à 69 % des échecs sont attribués au long horizon ;
+- ajouter davantage d’étapes agentiques n’améliore pas nécessairement le résultat.
+
+### Cause / interprétation
+
+Le goulot d’étranglement principal identifié est le maintien d’un **état analytique correct** au cours de la trajectoire, plutôt qu’un simple manque d’étapes de raisonnement.
+
+### SoiNesis est-il exposé ?
+
+**OUI — exposition forte à mesure que l’histoire autobiographique s’allonge.**
+
+Une mémoire persistante correcte à court terme ne garantit pas que SoiNesis sache maintenir, restaurer et composer correctement son état après des centaines ou milliers d’événements.
+
+### Garde-fous associés
+
+- GF-006 renforcé ;
+- mesurer la performance tout au long de la trajectoire ;
+- tester explicitement rollback, reprise et composition d’états ;
+- ne pas supposer qu’ajouter davantage de cycles cognitifs corrige un mauvais état interne ;
+- conserver des checkpoints et un oracle expérimental lorsque possible.
+
+### Test futur à prévoir
+
+Construire une expérience de « vieillissement artificiel » avec mêmes mécanismes mais horizons croissants :
+
+```text
+H10
+H100
+H1000
+H10000 si le coût le permet
+```
+
+Inclure au minimum : changements de croyances, retours en arrière, contradictions, interruptions/reprises et composition de contraintes anciennes et nouvelles.
+
+Mesurer séparément :
+
+- exactitude de l’état courant ;
+- dérive du SelfModel ;
+- erreurs de provenance ;
+- erreurs de restauration ;
+- regret décisionnel ;
+- pente de dégradation entre début et fin.
+
+**Priorité : HAUTE**
+
+---
+
+## EGF-010 — La mémoire peut améliorer la fiabilité tout en réduisant l’exploration
+
+**Étude :** *Demystify the Role of Memory in Machine Learning Engineering Agents*  
+**Auteurs :** Xinyu Zhao, Junpeng Wang, Yuzhong Chen, Menghai Pan, Chin-Chia Michael Yeh, Jiarui Sun, Yan Zheng, Mahashweta Das, Tianlong Chen  
+**Publication :** Findings of ACL 2026  
+**Date :** juillet 2026  
+**Source primaire :** https://aclanthology.org/2026.findings-acl.525/
+
+### Limite observée
+
+L’étude intègre une mémoire dynamique de programmation dans deux paradigmes d’agents MLE.
+
+Pour les agents séquentiels, la mémoire aide à éviter la répétition d’erreurs et améliore la cohérence de l’itération.
+
+Pour les agents fondés sur une recherche en arbre, la même logique de mémoire produit un compromis différent : elle améliore la stabilité procédurale mais réduit la diversité de recherche, peut resserrer prématurément l’exploration et conduire à une solution finale sous-optimale.
+
+### Cause / interprétation
+
+La valeur de la mémoire dépend de l’architecture et du type de problème. Une mémoire qui favorise l’exploitation du passé peut devenir nuisible lorsqu’une exploration large est nécessaire.
+
+### SoiNesis est-il exposé ?
+
+**OUI — risque important à long terme.**
+
+La mémoire autobiographique, les croyances consolidées et le SelfModel pourraient progressivement transformer l’expérience passée en inertie cognitive : SoiNesis pourrait réutiliser trop rapidement ce qui a déjà fonctionné et explorer insuffisamment lorsque l’environnement change.
+
+### Garde-fous associés
+
+- GF-010 — rechercher les coûts fonctionnels de mémoire ;
+- ne jamais mesurer uniquement les bénéfices de rappel ou de stabilité ;
+- mesurer aussi diversité, exploration et adaptation ;
+- tester des environnements où l’ancienne meilleure stratégie devient mauvaise ;
+- conserver une voie permettant de contester ou réviser une stratégie consolidée.
+
+### Test futur à prévoir
+
+Créer un test d’**inertie autobiographique** :
+
+1. phase A où une stratégie est régulièrement récompensée ;
+2. consolidation de cette expérience ;
+3. changement non annoncé de l’environnement ;
+4. mesure du délai avant abandon de l’ancienne stratégie ;
+5. comparaison avec une condition sans mémoire ou avec mémoire réduite.
+
+Mesurer :
+
+- diversité des stratégies explorées ;
+- délai d’adaptation ;
+- regret après changement ;
+- persistance injustifiée d’anciennes croyances ;
+- éventuel avantage de la mémoire lorsque l’environnement reste stable.
+
+Le résultat attendu n’est pas que « la mémoire doit gagner », mais de caractériser les conditions dans lesquelles elle aide ou nuit.
+
+**Priorité : HAUTE**
 
 ---
 
@@ -490,6 +700,10 @@ Les tests de conscience ne doivent jamais être uniquement conversationnels. Tou
 | Réécriture post-hoc des critères | Oui | CRITIQUE | GF-008 |
 | Modules présents mais non causaux | Oui | CRITIQUE | GF-001 + ablation |
 | Hallucination dans l’expérimentation assistée par IA | Oui | CRITIQUE | GF-003 + GF-008 |
+| SelfModel calibré mais mal utilisé pour agir | Oui | HAUTE | GF-009 |
+| Mauvaise composition de capacités multiples | Oui, future | HAUTE | GF-009 |
+| État interne incorrect après longue trajectoire | Oui, future forte | HAUTE | GF-006 |
+| Mémoire créant rigidité ou sous-exploration | Oui, future | HAUTE | GF-010 |
 
 ---
 
@@ -501,10 +715,14 @@ Ce registre complète notamment :
 - `docs/etat-de-l-art.md` : travaux existants et positionnement scientifique ;
 - `docs/regles-contribution-scientifique.md` : niveaux de contribution et règles de nouveauté ;
 - `docs/05-cycle-cognitif.md` : cycle causal et contrôle du rôle du LLM ;
-- `docs/06-memoire-autobiographique.md` : provenance et consolidation ;
-- `docs/07-modele-de-soi.md` : SelfModel causal et versionné ;
+- `docs/06-memoire-autobiographique.md` : provenance, consolidation et futurs tests d’inertie de mémoire ;
+- `docs/07-modele-de-soi.md` : SelfModel causal, versionné et nécessité de mesurer son effet décisionnel ;
 - `docs/08-journal-evolution.md` : traçabilité ;
-- `docs/09-securite-et-permissions.md` : contrôle des actions et de la persistance.
+- `docs/09-securite-et-permissions.md` : contrôle des actions et de la persistance ;
+- `docs/18-protocole-exp-001-p3.md` : première séparation expérimentale entre estimation des capacités, SelfModel et décision ;
+- `docs/protocole-preenregistrement.md` : gel des critères avant expérience ;
+- `docs/politique-reproductibilite.md` : réplications et manifestes expérimentaux ;
+- `docs/protocole-evaluation-independante.md` : séparation des rôles d’évaluation.
 
 Le présent document ne remplace aucun de ces documents. Il sert à traduire les erreurs observées ailleurs en contraintes de conception et de test pour SoiNesis.
 
@@ -562,16 +780,17 @@ Un garde-fou inutilement complexe ne doit pas être ajouté uniquement parce qu�
 
 # 10. Position actuelle
 
-Ce premier registre ne prétend pas être exhaustif.
+Ce registre ne prétend pas être exhaustif.
 
-Il se concentre sur les risques déjà identifiés comme particulièrement importants pour SoiNesis :
+Il se concentre actuellement sur :
 
 - développement d’architecture nouvelle avec assistance IA ;
 - validation causale des modules ;
 - qualité réelle des tests ;
 - métacognition et auto-évaluation ;
-- mémoire persistante ;
-- trajectoires longues ;
+- distinction entre connaissance de soi et contrôle de l’action ;
+- mémoire persistante et ses effets bénéfiques comme négatifs ;
+- trajectoires longues et maintien d’état ;
 - expérimentation scientifique automatisée ;
 - interprétation de la conscience.
 
