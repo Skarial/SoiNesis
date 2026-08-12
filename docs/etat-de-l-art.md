@@ -1,8 +1,8 @@
 # SoiNesis — État de l’art
 
 **Fichier :** `docs/etat-de-l-art.md`  
-**Version :** 0.1  
-**Date :** 9 août 2026  
+**Version :** 0.2  
+**Date :** 12 août 2026  
 **Statut :** document vivant, incomplet par définition
 
 ---
@@ -29,8 +29,8 @@ L’originalité d’une architecture, d’un mécanisme ou d’un résultat doi
 
 SoiNesis n’est pas fondé sur l’hypothèse que les briques suivantes sont nouvelles :
 
-- mémoire autobiographique ;
-- mémoire épisodique ;
+- mémoire autobiographique ou épisodique ;
+- mémoire persistante d’agent ;
 - modèle de soi ;
 - métacognition ;
 - estimation de ses propres capacités ;
@@ -39,12 +39,10 @@ SoiNesis n’est pas fondé sur l’hypothèse que les briques suivantes sont no
 - architectures cognitives modulaires ;
 - traitement récurrent ;
 - Global Workspace ;
-- agents incarnés ;
-- agents sociaux ;
+- agents incarnés ou sociaux ;
 - apprentissage à partir de l’expérience ;
+- planification et replanification ;
 - ablations expérimentales.
-
-Plusieurs de ces mécanismes ont déjà été étudiés séparément ou conjointement.
 
 La contribution éventuelle de SoiNesis doit donc être recherchée dans :
 
@@ -61,19 +59,19 @@ Aucune de ces possibilités ne doit être présumée à l’avance.
 
 # 3. Méthode de veille
 
-La présente version constitue un **premier état de l’art ciblé**, et non une revue systématique exhaustive.
+La présente version constitue un état de l’art ciblé et vivant, pas une revue systématique exhaustive.
 
-Avant toute revendication scientifique importante, il faudra compléter la recherche avec au minimum :
+Avant toute revendication scientifique importante, il faut compléter la recherche avec :
 
-- recherche par mots-clés et synonymes ;
-- recherche des travaux cités par les articles proches ;
-- recherche des articles qui les citent ;
-- comparaison avec les architectures cognitives classiques antérieures aux LLM ;
-- recherche des prépublications récentes ;
-- vérification de l’existence de réplications ou critiques ;
-- vérification de la date d’antériorité du résultat revendiqué.
+- mots-clés et synonymes ;
+- travaux cités par les articles proches ;
+- articles qui les citent ;
+- architectures cognitives classiques antérieures aux LLM ;
+- prépublications récentes ;
+- réplications, critiques et résultats négatifs ;
+- vérification des dates d’antériorité.
 
-Les résultats négatifs de cette recherche doivent aussi être documentés : ne pas trouver de précédent n’est pas une preuve suffisante d’originalité.
+Ne pas trouver de précédent n’est jamais une preuve suffisante d’originalité.
 
 ---
 
@@ -86,42 +84,18 @@ Les résultats négatifs de cette recherche doivent aussi être documentés : ne
 
 ### Éléments pertinents
 
-Le travail étend un modèle de langage avec notamment :
-
-- un historique d’expériences ;
-- une récupération dynamique de souvenirs ;
-- des réflexions de plus haut niveau ;
-- de la planification ;
-- un environnement social simulé ;
-- des études d’ablation sur plusieurs composants.
-
-### Ressemblances avec SoiNesis
-
-- mémoire persistante ;
-- continuité inter-épisodes ;
-- réflexion à partir de l’expérience ;
-- comportement dépendant de l’histoire ;
-- utilisation d’ablations pour mesurer le rôle des composants.
-
-### Différences actuellement visées par SoiNesis
-
-SoiNesis cherche notamment à rendre explicites :
-
-- la provenance des souvenirs ;
-- la distinction information reçue / déduction / imagination / expérience directe ;
-- le versionnement de certaines représentations internes ;
-- un modèle de soi causalement actif ;
-- des conditions expérimentales contrôlant l’accès aux mêmes preuves ;
-- la distinction stricte entre fonction cognitive et conscience phénoménale.
+- historique d’expériences ;
+- récupération dynamique de souvenirs ;
+- réflexions de plus haut niveau ;
+- planification ;
+- environnement social simulé ;
+- études d’ablation.
 
 ### Conséquence pour SoiNesis
 
-SoiNesis ne doit pas revendiquer comme nouvelles :
+La mémoire d’expériences, la réflexion sur cette mémoire, la planification depuis des souvenirs et l’usage d’ablations ne sont pas nouveaux en eux-mêmes.
 
-- l’idée d’un agent LLM possédant une mémoire d’expériences ;
-- la réflexion sur cette mémoire ;
-- la planification à partir de souvenirs ;
-- l’usage d’ablations sur ces composants.
+Les différences de SoiNesis doivent être recherchées dans la provenance, le versionnement, les comparaisons contrôlées, les effets causaux et les phénomènes longitudinaux.
 
 ---
 
@@ -132,27 +106,11 @@ SoiNesis ne doit pas revendiquer comme nouvelles :
 
 ### Éléments pertinents
 
-CoALA propose un cadre général pour les agents de langage comprenant notamment :
-
-- des composants de mémoire modulaires ;
-- un espace d’actions structuré ;
-- des actions internes et externes ;
-- un processus général de décision ;
-- une lecture des agents LLM à travers l’histoire des architectures cognitives.
-
-### Ressemblances avec SoiNesis
-
-- séparation de fonctions cognitives ;
-- architecture modulaire autour d’un modèle de langage ;
-- mémoire externe au LLM ;
-- décision et actions structurées ;
-- distinction entre cognition interne et interaction avec l’environnement.
+CoALA formalise une architecture cognitive pour agents de langage comprenant mémoire, actions internes/externes et processus de décision.
 
 ### Conséquence pour SoiNesis
 
-L’idée générale d’une **architecture cognitive modulaire pour agent de langage** n’est pas une contribution originale de SoiNesis.
-
-Une contribution éventuelle devra porter sur un mécanisme, une interaction causale, une mesure ou un résultat expérimental plus précis.
+L’idée générale d’une architecture cognitive modulaire autour d’un LLM n’est pas une contribution originale de SoiNesis.
 
 ---
 
@@ -163,32 +121,11 @@ Une contribution éventuelle devra porter sur un mécanisme, une interaction cau
 
 ### Éléments pertinents
 
-Le rapport examine plusieurs théories scientifiques de la conscience, notamment :
-
-- Recurrent Processing Theory ;
-- Global Workspace Theory ;
-- Higher-Order Theories ;
-- Predictive Processing ;
-- Attention Schema Theory.
-
-Il en dérive des propriétés indicatrices formulées de manière suffisamment computationnelle pour évaluer des systèmes artificiels.
-
-### Ressemblances avec SoiNesis
-
-- refus de déduire la conscience depuis une simple déclaration verbale ;
-- séparation entre propriétés fonctionnelles et conscience phénoménale ;
-- intérêt pour traitement récurrent, workspace, métacognition et représentation de soi ;
-- recherche de propriétés testables plutôt que d’une imitation convaincante.
+Le travail dérive des propriétés indicatrices à partir de plusieurs théories de la conscience : traitement récurrent, Global Workspace, Higher-Order, predictive processing, attention schema, etc.
 
 ### Conséquence pour SoiNesis
 
-SoiNesis ne doit pas présenter comme nouvelle l’idée générale de :
-
-- traduire des théories de la conscience en mécanismes computationnels ;
-- rechercher des indicateurs fonctionnels de conscience ;
-- évaluer séparément plusieurs propriétés associées à la conscience.
-
-SoiNesis peut toutefois comparer expérimentalement des implémentations précises et leurs interactions.
+SoiNesis ne doit pas présenter comme nouvelle l’idée générale de traduire des théories de la conscience en propriétés computationnelles testables. Une auto-déclaration n’est pas une preuve phénoménale.
 
 ---
 
@@ -199,43 +136,21 @@ SoiNesis peut toutefois comparer expérimentalement des implémentations précis
 
 ### Éléments pertinents
 
-MetaCogAgent équipe des agents d’un mécanisme de métacognition permettant notamment :
-
-- d’estimer l’adéquation entre une tâche et leurs capacités ;
-- d’utiliser un profil historique de capacités ;
-- de raffiner progressivement leurs limites de compétence ;
-- de déléguer des tâches lorsque la confiance est insuffisante ;
-- d’évaluer les composants par ablation.
-
-### Ressemblances avec SoiNesis
-
-Cette publication est directement pertinente pour la tranche P3 :
-
 - estimation de capacité propre ;
 - apprentissage depuis les performances passées ;
 - confiance métacognitive ;
-- décision dépendant de cette estimation ;
-- étude causale par comparaison de conditions.
+- décision et délégation dépendant de cette estimation ;
+- ablations.
 
-### Différence expérimentale actuellement recherchée par P3
+### Conséquence pour P3
 
-P3 distingue notamment :
+La question « une IA peut-elle apprendre ses propres limites depuis son historique ? » possède déjà des précédents.
 
-- une estimation fixe ;
-- une estimation calculée depuis l’historique brut ;
-- une condition utilisant un état métacognitif et un `SelfModel` persistant/versionné.
+La question plus spécifique de P3 reste :
 
-L’intérêt potentiel n’est donc pas de démontrer simplement qu’un agent peut apprendre ses limites depuis son historique : ce principe possède déjà des précédents.
+> À preuves comparables, un `SelfModel` persistant, versionné et causalement actif produit-il une différence mesurable par rapport à une reconstruction directe depuis le même historique ?
 
-La question plus précise devient :
-
-> Une représentation persistante, versionnée et causalement active de ses propres capacités apporte-t-elle un effet reproductible au-delà de l’accès direct au même historique de performances ?
-
-### Statut d’originalité
-
-**Inconnu.**
-
-Une comparaison bibliographique plus fine sera nécessaire si P3 produit un effet positif.
+**Statut d’originalité : inconnu.**
 
 ---
 
@@ -246,32 +161,11 @@ Une comparaison bibliographique plus fine sera nécessaire si P3 produit un effe
 
 ### Éléments pertinents
 
-Eyla explore notamment :
+Identité persistante, self-model, mémoire épisodique, incertitude et développement assisté par IA.
 
-- une identité persistante ;
-- un self-model cohérent ;
-- une mémoire épisodique ;
-- une estimation explicite de l’incertitude ;
-- une architecture intégrée ;
-- un développement assisté par des outils d’IA.
+### Leçon pour SoiNesis
 
-Le travail rapporte également un échec d’implémentation où de nombreux sous-systèmes ajoutés influençaient très peu la sortie finale.
-
-### Ressemblances avec SoiNesis
-
-- identité comme propriété architecturale ;
-- self-model ;
-- mémoire épisodique/autobiographique ;
-- incertitude ;
-- développement d’une architecture inhabituelle avec assistance IA.
-
-### Leçon importante pour SoiNesis
-
-La présence d’un module dans le code ne démontre pas son rôle cognitif.
-
-Cette publication renforce une règle déjà centrale de SoiNesis :
-
-> un mécanisme sans effet causal mesurable ne doit pas être considéré comme fonctionnel, même si son implémentation paraît complexe.
+Un module présent dans le code ne démontre pas une fonction cognitive. La causalité doit être mesurée avant d’étendre l’architecture.
 
 ---
 
@@ -282,27 +176,11 @@ Cette publication renforce une règle déjà centrale de SoiNesis :
 
 ### Éléments pertinents
 
-Le travail propose une architecture inspirée de Global Workspace Theory avec notamment :
-
-- un hub central de diffusion ;
-- plusieurs fonctions spécialisées ;
-- un cycle cognitif continu et événementiel ;
-- une mémoire à plusieurs niveaux ;
-- des mécanismes visant une continuité d’agence dans le temps.
-
-### Ressemblances avec SoiNesis
-
-- intégration globale ;
-- diffusion d’informations importantes entre fonctions ;
-- cycle cognitif récurrent ;
-- continuité temporelle ;
-- mémoire longue durée.
+Hub de diffusion, fonctions spécialisées, cycle cognitif continu, mémoire multi-niveaux et continuité d’agence.
 
 ### Conséquence pour SoiNesis
 
-La future intégration globale de SoiNesis devra être comparée explicitement aux architectures Global Workspace existantes.
-
-Le simple fait d’ajouter un « espace global » ou une boucle continue ne constituera pas une contribution nouvelle.
+Un futur mécanisme d’intégration globale devra être comparé aux architectures Global Workspace existantes. Ajouter un « espace global » n’est pas nouveau en soi.
 
 ---
 
@@ -311,87 +189,176 @@ Le simple fait d’ajouter un « espace global » ou une boucle continue ne cons
 **Référence :** Wes Gurnee et al., *Verbalizable Representations Form a Global Workspace in Language Models*.  
 **Source :** https://arxiv.org/abs/2607.15495
 
-### Éléments pertinents
+### Importance
 
-Ce travail récent rapporte que certaines représentations internes de modèles de langage présentent plusieurs propriétés fonctionnelles rapprochées d’un Global Workspace.
+Certaines propriétés fonctionnelles rapprochées d’un Global Workspace pourraient déjà émerger dans les représentations internes du LLM.
 
-### Importance pour SoiNesis
+Les futures expériences doivent donc distinguer :
 
-Cette piste est particulièrement importante pour éviter une hypothèse implicite erronée :
+- effet du LLM lui-même ;
+- effet de l’architecture externe SoiNesis ;
+- interaction entre les deux.
 
-> un mécanisme fonctionnel ressemblant à un workspace n’a pas nécessairement besoin d’être entièrement ajouté autour du LLM.
-
-Lorsqu’un futur module d’intégration globale sera testé, il faudra distinguer :
-
-- l’effet provenant du LLM lui-même ;
-- l’effet provenant de l’architecture externe de SoiNesis ;
-- l’interaction éventuelle entre les deux.
-
-Le résultat de cette prépublication ne constitue pas une preuve de conscience phénoménale.
+Ce résultat ne constitue pas une preuve de conscience phénoménale.
 
 ---
 
-# 5. Tableau de positionnement initial
+## 4.8 AMA-Bench — mémoire agentique et causalité (2026)
+
+**Référence :** Yujie Zhao et al., *AMA-Bench: Evaluating Long-Horizon Memory for Agentic Applications*.  
+**Source :** https://arxiv.org/abs/2602.22769
+
+### Éléments pertinents
+
+AMA-Bench évalue des systèmes mémoire sur de vraies trajectoires agentiques et des trajectoires synthétiques extensibles à de longs horizons.
+
+Les auteurs rapportent que les systèmes existants sont notamment limités par :
+
+- perte d’information causale ;
+- perte d’information objective ;
+- caractère lossy des récupérations par similarité.
+
+Leur propre système ajoute notamment un graphe de causalité et une récupération outillée.
+
+### Conséquence pour SoiNesis
+
+Une mémoire autobiographique ne doit pas être évaluée seulement sur le rappel du contenu.
+
+SoiNesis doit préserver et tester :
+
+- pourquoi un état existe ;
+- quelle preuve ou action l’a causé ;
+- l’ordre temporel ;
+- la provenance ;
+- la capacité à revenir aux preuves brutes.
+
+Cela renforce le garde-fou `GF-011` dans `docs/registre-echecs-et-garde-fous.md`.
+
+---
+
+## 4.9 Chain-of-Memory — construction légère et utilisation de la mémoire (2026)
+
+**Référence :** Xiucheng Xu et al., *Chain-of-Memory: Lightweight Memory Construction with Dynamic Evolution for LLM Agents*.  
+**Source :** https://arxiv.org/abs/2601.14287
+
+### Éléments pertinents
+
+Les auteurs identifient deux limites importantes :
+
+- les architectures de construction mémoire complexes peuvent coûter beaucoup pour des gains faibles ;
+- un bon rappel des fragments pertinents ne garantit pas une bonne précision de raisonnement.
+
+Leur approche cherche à mieux organiser les souvenirs récupérés en chemins d’inférence.
+
+### Conséquence pour SoiNesis
+
+Les futures évaluations mémoire doivent distinguer au minimum :
+
+```text
+conservation
+→ récupération
+→ intégration / interprétation
+→ effet sur la décision
+```
+
+P1/P2 ne doivent pas être généralisés comme preuve qu’un bon rappel équivaut à une mémoire fonctionnellement supérieure.
+
+---
+
+## 4.10 Aghzal et al. — échecs des web agents par niveau (ACL 2026)
+
+**Référence :** Mohamed Aghzal, Gregory J. Stein, Ziyu Yao, *Why Do LLM-based Web Agents Fail? A Hierarchical Planning Perspective*.  
+**Source :** https://aclanthology.org/2026.acl-long.1483/
+
+### Éléments pertinents
+
+L’étude décompose les agents en :
+
+- planification haut niveau ;
+- exécution bas niveau ;
+- replanification.
+
+Des plans PDDL structurés deviennent plus concis et orientés vers le but que des plans en langage naturel, mais l’exécution bas niveau reste le principal goulot d’étranglement.
+
+### Conséquence pour SoiNesis
+
+Un objectif persistant ou un plan cohérent ne doit pas être confondu avec une capacité d’action réussie.
+
+Les futurs tests d’agence devront mesurer séparément :
+
+```text
+objectif
+→ plan
+→ action
+→ observation
+→ détection d’erreur
+→ replanification
+```
+
+Cela renforce `GF-012`.
+
+---
+
+# 5. Tableau de positionnement actuel
 
 | Élément | Précédents identifiés | Position actuelle de SoiNesis |
 | --- | --- | --- |
 | Mémoire persistante d’agent | Oui | Reproduction / spécialisation |
-| Mémoire autobiographique structurée | Oui, sous plusieurs formes | Différences de provenance et de contrôle à mesurer |
+| Mémoire autobiographique structurée | Oui, sous plusieurs formes | Provenance, causalité et contrôle à mesurer |
+| Récupération par similarité | Oui | Ne pas supposer qu’elle suffit aux relations causales |
+| Bon rappel → bon raisonnement | Non garanti | Mesurer séparément récupération et utilisation |
 | Réflexion sur expériences | Oui | Pas une nouveauté en soi |
 | Architecture cognitive modulaire | Oui | Pas une nouveauté en soi |
-| Métacognition des capacités | Oui | P3 doit chercher une question plus précise |
+| Métacognition des capacités | Oui | P3 doit poser une question plus précise |
 | Self-model | Oui | Originalité du mécanisme précis inconnue |
-| Self-model versionné et causal comparé à historique brut | Recherche ciblée nécessaire | Question P3 potentiellement intéressante |
+| Self-model versionné causal vs historique brut | Recherche ciblée nécessaire | Question P3 potentiellement intéressante |
+| Planification hiérarchique agentique | Oui | Plan ≠ exécution ; mesurer chaque couche |
 | Global Workspace artificiel | Oui | Futur module à comparer aux travaux existants |
-| Cycle cognitif continu | Oui | Pas une nouveauté en soi |
 | Ablations | Oui | Méthode standard à conserver |
 | Indicateurs fonctionnels de conscience | Oui | Ne pas revendiquer l’idée générale |
-| Développement longitudinal d’une identité artificielle | Précédents partiels | Terrain de recherche à préciser |
+| Développement longitudinal d’une identité artificielle | Précédents partiels | Terrain à préciser |
 | Conscience phénoménale | Aucun résultat accepté comme démonstration dans ce projet | Inconnue |
 
 ---
 
 # 6. Conséquences immédiates pour P3
 
-Aucune modification de l’architecture ou du code P3 n’est imposée par cet état de l’art à la date du 9 août 2026.
+Aucune modification rétroactive du protocole P3 n’est imposée par ces ajouts.
 
-La comparaison P3 reste scientifiquement utile si elle contrôle réellement les informations accessibles aux conditions.
+P3 doit continuer à répondre à sa question gelée. Les nouveaux travaux influencent surtout :
 
-La question ne doit cependant plus être formulée comme :
+- l’interprétation du résultat ;
+- les futurs protocoles mémoire ;
+- les futurs tests de long horizon ;
+- les futurs objectifs et actions incarnées.
 
-> Une IA peut-elle apprendre ses propres capacités ?
+Si P3 ne montre aucune différence spécifique entre B et C, le résultat négatif doit être conservé.
 
-Cette question possède déjà des précédents.
-
-La question de travail plus précise est :
-
-> À preuves disponibles comparables, l’utilisation d’un `SelfModel` persistant, versionné et causalement actif produit-elle une différence mesurable et reproductible par rapport à l’exploitation directe de l’historique brut ?
-
-Si P3 ne montre aucune différence spécifique, le résultat négatif doit être conservé.
-
-Si P3 montre une différence, l’étape suivante doit être :
+Si P3 montre une différence :
 
 1. vérifier les facteurs de confusion ;
 2. reproduire l’effet ;
-3. rechercher des travaux ayant déjà testé une comparaison équivalente ;
-4. seulement ensuite évaluer le niveau de contribution scientifique.
+3. rechercher une comparaison équivalente dans la littérature ;
+4. seulement ensuite évaluer le niveau de contribution.
 
 ---
 
 # 7. Questions de veille prioritaires
-
-Les recherches bibliographiques suivantes restent prioritaires :
 
 1. self-models artificiels causalement actifs ;
 2. self-models versionnés ou autobiographiques ;
 3. comparaison self-model vs accès direct au même historique ;
 4. calibration métacognitive longitudinale ;
 5. continuité d’identité après changement de modèle de langage ;
-6. transfert d’identité ou de mémoire entre modèles de langage ;
-7. architectures à objectifs persistants propres ;
-8. développement artificiel longitudinal ;
-9. Global Workspace externe vs représentations globales internes au LLM ;
-10. tests d’ablation appliqués aux architectures de conscience artificielle.
+6. transfert d’identité ou de mémoire entre modèles ;
+7. consolidation mémoire préservant causalité et provenance ;
+8. récupération causale vs récupération par similarité ;
+9. coût cognitif des mémoires structurées complexes ;
+10. objectifs persistants et mémoire prospective ;
+11. développement artificiel longitudinal ;
+12. Global Workspace externe vs représentations globales internes au LLM ;
+13. ablations appliquées aux architectures de conscience artificielle ;
+14. séparation planification / exécution / replanification dans les agents incarnés.
 
 ---
 
@@ -405,14 +372,7 @@ Ce document doit être mis à jour :
 - avant toute revendication de nouveauté ;
 - lorsqu’un travail récent modifie directement l’interprétation d’une expérience SoiNesis.
 
-Chaque ajout doit préciser autant que possible :
-
-- la référence ;
-- ce qui a réellement été testé ;
-- les résultats ;
-- les ressemblances ;
-- les différences ;
-- les conséquences concrètes pour SoiNesis.
+Chaque ajout doit préciser autant que possible : référence, test réel, résultats, ressemblances, différences et conséquences concrètes pour SoiNesis.
 
 ---
 
@@ -420,13 +380,13 @@ Chaque ajout doit préciser autant que possible :
 
 Une absence de travail identique trouvé dans cette liste ne signifie pas que le travail n’existe pas.
 
-Les formulations autorisées sont :
+Formulations autorisées :
 
 - « aucun précédent identifié dans la recherche effectuée » ;
 - « comparaison potentiellement nouvelle » ;
 - « originalité à vérifier ».
 
-Les formulations suivantes sont interdites sans justification bibliographique forte :
+Formulations interdites sans justification bibliographique forte :
 
 - « première architecture au monde » ;
 - « mécanisme jamais étudié » ;
