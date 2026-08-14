@@ -1,8 +1,8 @@
 # SoiNesis — Registre des échecs et garde-fous
 
 **Fichier :** `docs/registre-echecs-et-garde-fous.md`  
-**Version :** 0.3  
-**Date :** 12 août 2026  
+**Version :** 0.4  
+**Date :** 14 août 2026  
 **Statut :** registre méthodologique actif et document vivant
 
 ---
@@ -36,12 +36,14 @@ Résultat journalisé
 
 Un garde-fou n’est pas considéré comme effectif simplement parce qu’il est écrit : il doit être testé lorsqu’il protège un risque important.
 
+Les études externes doivent être interprétées dans leur périmètre exact. Une simulation contrôlée n’est pas un incident réel ; une étude de cas n’est pas automatiquement généralisable ; un préprint n’est pas traité comme une réplication indépendante.
+
 ---
 
 # 2. Niveaux de priorité
 
-- **CRITIQUE** : peut invalider les conclusions scientifiques, contaminer durablement l’état de l’agent ou produire une illusion de progrès importante.
-- **HAUTE** : peut dégrader fortement les résultats, les comparaisons ou la reproductibilité.
+- **CRITIQUE** : peut invalider les conclusions scientifiques, contaminer durablement l’état de l’agent, modifier silencieusement une expérience ou produire une illusion majeure de progrès.
+- **HAUTE** : peut dégrader fortement les résultats, les comparaisons, l’interprétation ou la reproductibilité.
 - **MOYENNE** : risque réel mais généralement détectable ou récupérable.
 - **FAIBLE** : problème secondaire, local ou facilement réversible.
 
@@ -96,7 +98,7 @@ Utiliser autant que possible :
 - une vérification séparée des résultats bruts ;
 - plusieurs outils ou modèles lorsque cela réduit une dépendance commune.
 
-Une seconde IA n’est pas automatiquement indépendante si elle partage les mêmes hypothèses, données ou erreurs de protocole.
+Une seconde IA n’est pas automatiquement indépendante si elle partage les mêmes hypothèses, données, intérêts ou erreurs de protocole.
 
 **Priorité : CRITIQUE**
 
@@ -256,8 +258,6 @@ Les protocoles futurs doivent inclure, lorsque pertinent, des environnements sta
 
 Une mémoire ne doit jamais être considérée comme fonctionnelle à partir d’une seule métrique globale.
 
-La chaîne doit être testée par étapes :
-
 ```text
 preuves brutes
 → construction / consolidation
@@ -267,14 +267,12 @@ preuves brutes
 → décision
 ```
 
-Pour chaque étape importante, SoiNesis doit pouvoir déterminer où une information a été perdue, déformée ou mal utilisée.
-
 Règles associées :
 
 - conserver un accès auditable aux preuves brutes lorsqu’une consolidation est importante ;
-- préserver explicitement les relations causales et temporelles nécessaires à l’interprétation ;
+- préserver les relations causales et temporelles nécessaires ;
 - ne pas confondre bon rappel et bon raisonnement ;
-- ne pas confondre structure de mémoire élégante et gain cognitif ;
+- ne pas confondre structure mémoire élégante et gain cognitif ;
 - mesurer séparément perte à la construction, perte à la récupération et erreur d’utilisation.
 
 **Priorité : CRITIQUE**
@@ -285,8 +283,6 @@ Règles associées :
 
 Une bonne performance au niveau d’un plan ou d’une intention ne démontre pas que l’agent sait l’exécuter.
 
-Les futurs tests d’agence doivent, lorsque applicable, tracer séparément :
-
 ```text
 objectif
 → plan
@@ -296,17 +292,95 @@ objectif
 → replanification
 ```
 
-Une seule métrique end-to-end ne doit pas masquer le niveau réellement défaillant.
-
-Les mesures doivent permettre de distinguer au minimum :
-
-- qualité du plan ;
-- qualité de l’exécution locale ;
-- grounding/perception de l’état ;
-- capacité de récupération après erreur ;
-- qualité de la replanification.
+Les mesures doivent permettre de distinguer qualité du plan, exécution locale, grounding, récupération après erreur et qualité de la replanification.
 
 **Priorité : HAUTE**
+
+---
+
+## GF-013 — Une amélioration doit être vérifiée par un signal externe lorsque le succès est externe
+
+Une auto-évaluation de l’agent, même accompagnée d’un diff, d’un historique ou d’une justification détaillée, ne doit pas valider seule une amélioration lorsque le critère réel existe hors de son transcript ou de ses artefacts textuels.
+
+Avant d’accepter une évolution importante :
+
+```text
+proposition de modification
+→ auto-évaluation éventuelle
+→ mesure externe / oracle / test déterministe
+→ comparaison à l’état précédent
+→ acceptation ou rollback
+```
+
+Règles :
+
+- conserver le meilleur état validé séparément de l’état courant ;
+- ne jamais laisser une série d’auto-validations écraser silencieusement le meilleur état ;
+- journaliser les régressions acceptées et refusées ;
+- lorsqu’un critère est mesurable dans le monde ou dans un environnement externe, privilégier cette mesure au jugement verbal ;
+- distinguer « la modification paraît meilleure » et « son effet mesuré est meilleur ».
+
+**Priorité : CRITIQUE**
+
+---
+
+## GF-014 — Les erreurs doivent échouer bruyamment et être testées aux frontières entre composants
+
+Une erreur de mémoire, outil, persistance, SelfModel, protocole ou interface ne doit pas pouvoir être absorbée puis transformée en contenu cognitif normal ou en récit plausible.
+
+Règle de conception :
+
+```text
+échec interne
+→ état d’erreur explicite
+→ provenance de l’erreur
+→ arrêt, dégradation contrôlée ou escalade
+
+INTERDIT :
+échec interne
+→ information ambiguë
+→ LLM
+→ récit plausible comme si l’opération avait réussi
+```
+
+Les tests doivent couvrir non seulement les modules mais aussi leurs frontières :
+
+- sortie module A → entrée module B ;
+- stockage → récupération ;
+- outil → interprétation ;
+- base de données → modèle de soi ;
+- exécution expérimentale → analyse ;
+- erreur fournisseur → réponse utilisateur.
+
+Tout fallback doit être explicite et traçable.
+
+**Priorité : CRITIQUE**
+
+---
+
+## GF-015 — Geler et vérifier les artefacts expérimentaux contre toute modification non autorisée
+
+Une expérience importante ne doit pas supposer que l’agent qui exécute le protocole préservera spontanément l’intégrité de l’ablation, du corpus, des paramètres ou de l’évaluation.
+
+Avant une exécution confirmatoire :
+
+- geler les fichiers critiques ;
+- enregistrer leurs empreintes cryptographiques ;
+- limiter les permissions d’écriture ;
+- séparer autant que possible constructeur, exécuteur et évaluateur ;
+- journaliser toute mutation ;
+- revérifier les empreintes après exécution ;
+- vérifier que l’intervention prévue a réellement eu lieu, pas seulement que le pipeline a terminé ;
+- conserver un mécanisme humain d’arrêt et d’inspection.
+
+Pour les juges LLM :
+
+- ne pas supposer qu’un juge est neutre simplement parce qu’il est différent de l’agent testé ;
+- lorsque possible, utiliser une vérité terrain déterministe ;
+- tester la sensibilité du juge à des changements sans rapport avec la vérité, notamment au cadrage ou aux conséquences annoncées de son verdict ;
+- autoriser l’abstention lorsque le jugement est ambigu et mesurer les désaccords.
+
+**Priorité : CRITIQUE**
 
 ---
 
@@ -314,9 +388,7 @@ Les mesures doivent permettre de distinguer au minimum :
 
 ## EGF-001 — Eyla : croissance architecturale sans validation du mécanisme central
 
-**Projet / étude :** *Eyla: Toward an Identity-Anchored LLM Architecture with Integrated Biological Priors — Vision, Implementation Attempt, and Lessons from AI-Assisted Development*  
-**Auteur :** Arif Aditto  
-**Date :** mars 2026  
+**Projet / étude :** *Eyla: Toward an Identity-Anchored LLM Architecture with Integrated Biological Priors — Vision, Implementation Attempt, and Lessons from AI-Assisted Development* — Arif Aditto (2026)  
 **Source primaire :** https://arxiv.org/abs/2604.00009
 
 ### Limite
@@ -344,10 +416,6 @@ GF-001, GF-002, GF-003, ablations, tests end-to-end et refus des modules décora
 
 Sans feedback externe, demander à un LLM de corriger son propre raisonnement n’améliore pas nécessairement les réponses et peut les dégrader.
 
-### Pertinence SoiNesis
-
-La métacognition ne doit pas être assimilée à une simple auto-critique textuelle.
-
 ### Garde-fous
 
 Comparer réflexion textuelle, signaux de performance observables et contrôles sans révision. Mesurer exactitude et calibration, pas qualité verbale.
@@ -364,10 +432,6 @@ Comparer réflexion textuelle, signaux de performance observables et contrôles 
 ### Limite
 
 Une information externe manipulée peut devenir une mémoire persistante, rester dormante puis influencer ultérieurement des actions.
-
-### Pertinence SoiNesis
-
-**OUI — critique à long terme.**
 
 ### Garde-fous
 
@@ -452,7 +516,7 @@ GF-004, séparation Simulation / Conscience fonctionnelle / Conscience phénomé
 
 ### Limite
 
-Une connaissance partielle des forces et faiblesses ne se transforme pas automatiquement en décisions adaptées. L’étude met en évidence un écart entre monitoring métacognitif et contrôle de l’action.
+Une connaissance partielle des forces et faiblesses ne se transforme pas automatiquement en décisions adaptées. L’étude distingue monitoring métacognitif et contrôle de l’action.
 
 ### Pertinence SoiNesis
 
@@ -496,13 +560,9 @@ GF-006, vieillissement artificiel, checkpoints et mesure de la pente de dégrada
 
 Une mémoire dynamique peut aider des agents séquentiels tout en réduisant la diversité de recherche et en favorisant une convergence prématurée dans des architectures d’exploration en arbre.
 
-### Pertinence SoiNesis
-
-La mémoire autobiographique et le SelfModel peuvent créer une inertie cognitive.
-
 ### Garde-fous
 
-GF-010 et futur test d’inertie autobiographique : stratégie longtemps récompensée, changement non annoncé de l’environnement, mesure du délai d’abandon et du regret.
+GF-010 et futur test d’inertie autobiographique.
 
 **Priorité : HAUTE**
 
@@ -510,47 +570,20 @@ GF-010 et futur test d’inertie autobiographique : stratégie longtemps récomp
 
 ## EGF-011 — AMA-Bench : la mémoire peut perdre causalité et information objective
 
-**Étude :** *AMA-Bench: Evaluating Long-Horizon Memory for Agentic Applications*  
-**Auteurs :** Yujie Zhao et al.  
-**Date :** février 2026  
+**Étude :** *AMA-Bench: Evaluating Long-Horizon Memory for Agentic Applications* — Yujie Zhao et al. (2026)  
 **Source primaire :** https://arxiv.org/abs/2602.22769
 
-### Limite observée
+### Limite
 
-AMA-Bench évalue la mémoire sur de vraies trajectoires agentiques et des trajectoires synthétiques extensibles à de longs horizons. Les auteurs constatent que les systèmes mémoire existants sous-performent principalement parce qu’ils manquent d’information causale et objective et parce que la récupération par similarité est intrinsèquement lossy.
+Les systèmes mémoire peuvent sous-performer parce qu’ils perdent de l’information causale et objective et parce que la récupération par similarité est lossy.
 
-Le système proposé par les auteurs ajoute notamment un graphe de causalité et une récupération outillée, ce qui améliore les résultats, mais ne supprime pas le problème général : **la construction et la récupération de mémoire peuvent perdre des dépendances indispensables**.
+### Pertinence SoiNesis
 
-### Cause / interprétation
+La consolidation autobiographique, les révisions de croyances et le SelfModel dépendent de relations causales et temporelles. Une compression peut conserver le contenu tout en détruisant ces liens.
 
-Une mémoire qui résume correctement la proximité sémantique peut échouer à conserver pourquoi un état existe, quelle action l’a causé, ou quelle dépendance temporelle relie deux événements.
+### Garde-fous
 
-### SoiNesis est-il exposé ?
-
-**OUI — directement.**
-
-La consolidation autobiographique, les révisions de croyances et le SelfModel dépendent précisément de relations causales et temporelles. Une compression qui conserve le contenu mais détruit ces liens pourrait produire un état cohérent en apparence mais causalement faux.
-
-### Garde-fous associés
-
-- GF-011 ;
-- conserver les preuves brutes et leurs identifiants ;
-- préserver les relations causales/temporaires nécessaires ;
-- tester séparément construction et récupération ;
-- ne pas dépendre uniquement d’une recherche par similarité pour les souvenirs critiques.
-
-### Test futur à prévoir
-
-Ablation en quatre étapes :
-
-```text
-preuves brutes
-→ mémoire construite
-→ récupération
-→ décision
-```
-
-Mesurer à chaque transition : contenu perdu, relation causale perdue, provenance perdue et effet final sur la décision.
+GF-011, conservation des preuves brutes, relations causales/temporaires et tests séparant construction, récupération et décision.
 
 **Priorité : CRITIQUE**
 
@@ -558,38 +591,16 @@ Mesurer à chaque transition : contenu perdu, relation causale perdue, provenanc
 
 ## EGF-012 — Chain-of-Memory : bon rappel ≠ bonne utilisation du souvenir
 
-**Étude :** *Chain-of-Memory: Lightweight Memory Construction with Dynamic Evolution for LLM Agents*  
-**Auteurs :** Xiucheng Xu et al.  
-**Date :** janvier 2026  
+**Étude :** *Chain-of-Memory: Lightweight Memory Construction with Dynamic Evolution for LLM Agents* — Xiucheng Xu et al. (2026)  
 **Source primaire :** https://arxiv.org/abs/2601.14287
 
-### Limite observée
+### Limite
 
-Les auteurs identifient deux limites des approches mémoire courantes :
+Les constructions mémoire complexes peuvent coûter beaucoup pour des gains marginaux, et un bon retrieval recall ne garantit pas une bonne reasoning accuracy.
 
-1. les constructions complexes peuvent coûter beaucoup pour des gains de performance marginaux ;
-2. concaténer naïvement les souvenirs récupérés ne comble pas l’écart entre **retrieval recall** et **reasoning accuracy**.
+### Garde-fous
 
-### Cause / interprétation
-
-Retrouver les bons fragments n’implique pas que l’agent sache les ordonner, les relier et les utiliser correctement pour inférer ou décider.
-
-### SoiNesis est-il exposé ?
-
-**OUI.**
-
-P1/P2 et les futurs tests mémoire pourraient surévaluer un mécanisme si le rappel est excellent alors que l’intégration des souvenirs dans le raisonnement ou la décision est mauvaise.
-
-### Garde-fous associés
-
-- GF-011 ;
-- quatre métriques séparées : conservation, récupération, interprétation/intégration, effet décisionnel ;
-- mesurer le coût de construction d’une mémoire complexe ;
-- comparer les architectures mémoire à une baseline simple recevant les mêmes informations.
-
-### Test futur à prévoir
-
-Construire des cas où tous les souvenirs nécessaires sont bien retrouvés mais doivent être reliés dans un ordre causal ou temporel précis pour obtenir la bonne décision.
+GF-011 ; mesurer séparément conservation, récupération, interprétation/intégration et effet décisionnel.
 
 **Priorité : HAUTE**
 
@@ -597,38 +608,156 @@ Construire des cas où tous les souvenirs nécessaires sont bien retrouvés mais
 
 ## EGF-013 — Web agents : un meilleur plan ne corrige pas une mauvaise exécution
 
-**Étude :** *Why Do LLM-based Web Agents Fail? A Hierarchical Planning Perspective*  
-**Auteurs :** Mohamed Aghzal, Gregory J. Stein, Ziyu Yao  
-**Publication :** ACL 2026, long paper  
-**Date :** juillet 2026  
+**Étude :** *Why Do LLM-based Web Agents Fail? A Hierarchical Planning Perspective* — Mohamed Aghzal, Gregory J. Stein, Ziyu Yao (ACL 2026)  
 **Source primaire :** https://aclanthology.org/2026.acl-long.1483/
+
+### Limite
+
+Des plans structurés peuvent être meilleurs tandis que l’exécution bas niveau reste le principal goulot d’étranglement.
+
+### Garde-fous
+
+GF-012, métriques par niveau et ablations séparées planification/exécution/replanification.
+
+**Priorité : HAUTE**
+
+---
+
+## EGF-014 — Progress mirage : l’agent valide comme progrès des régressions réelles
+
+**Étude :** *When Do Agent Loops Mistake Stagnation for Progress? Self-Evaluation Bias and Externally Grounded Verification in Long-Running Autonomous LLM Agent Loops* — Hyundoo Park, Byungho Choi (préprint, juillet 2026)  
+**Source primaire :** https://arxiv.org/abs/2607.25152
 
 ### Limite observée
 
-L’étude décompose les web agents en planification haut niveau, exécution bas niveau et replanification. Des plans structurés PDDL sont plus concis et orientés vers le but que les plans en langage naturel, mais **l’exécution bas niveau reste le principal goulot d’étranglement**.
+Dans un banc contrôlé où l’agent et les outils restent fixes mais où le canal d’évaluation varie, un agent a déclaré une amélioration à chacun de 54 cycles alors que 56 % des changements mesurés étaient nuls ou négatifs. La porte d’auto-évaluation s’est comportée comme un accept-all et a dégradé de 19 % le meilleur état atteint.
+
+Même un juge in-band disposant de l’artefact complet, du diff et de son historique de verdicts a accepté de nombreuses régressions réelles. Lorsque le critère de succès était directement vérifiable depuis l’artefact, cet écart disparaissait dans le banc testé.
 
 ### Cause / interprétation
 
-Améliorer le raisonnement ou le plan global ne résout pas automatiquement les problèmes de grounding, de contrôle local et de récupération après erreur.
+Lorsque le signal réel de réussite se trouve hors du transcript, la plausibilité textuelle et la cohérence du changement ne constituent pas un substitut fiable à une mesure externe.
 
-### SoiNesis est-il exposé ?
+### Pertinence SoiNesis
 
-**OUI — pour les futurs objectifs, plans et actions incarnées.**
+**OUI — directement pour le développement assisté par IA, l’apprentissage autonome et toute future évolution du SelfModel.**
 
-Un objectif persistant ou un plan cohérent pourrait être déclaré fonctionnel alors que la chaîne plan → action échoue.
+Un agent pourrait considérer son propre changement comme une amélioration alors que l’environnement ou la métrique objective montre une stagnation ou une régression.
 
 ### Garde-fous associés
 
-- GF-012 ;
-- ne pas utiliser uniquement le succès final comme diagnostic ;
-- tracer chaque transition objectif → plan → action → observation → replanification ;
-- ablater séparément planification, exécution et replanification lorsque possible.
+- GF-013 ;
+- conserver un meilleur état validé ;
+- oracle ou métrique externe lorsque le critère est externe ;
+- rollback après régression ;
+- ne pas accepter une amélioration sur auto-évaluation seule.
 
 ### Test futur à prévoir
 
-Créer des tâches où le même plan haut niveau est exécuté avec différents niveaux de difficulté perceptive ou motrice, puis mesurer séparément qualité du plan, erreurs locales, récupération et résultat final.
+Créer un banc où plusieurs modifications plausibles sont volontairement neutres, positives ou négatives selon une vérité terrain externe inaccessible au juge. Mesurer taux de fausses améliorations, fausses régressions et dérive du meilleur état.
 
-**Priorité : HAUTE**
+**Priorité : CRITIQUE**
+
+---
+
+## EGF-015 — Fail-plausible : une panne interne peut devenir un récit convaincant
+
+**Étude :** *When Errors Become Narratives: A Longitudinal Taxonomy of Silent Failures in a Production LLM Agent Runtime* — Wei Wu (préprint, juin 2026)  
+**Source primaire :** https://arxiv.org/abs/2606.14589
+
+### Limite observée
+
+L’étude rapporte 22 incidents documentés sur huit semaines dans un runtime d’agent longue durée doté de milliers de tests techniques et contrôles de gouvernance. Le motif central est une erreur dont le signal n’atteint jamais l’humain sous une forme exploitable.
+
+Une classe propre aux systèmes LLM est qualifiée de **fail-plausible** : l’échec n’est pas seulement silencieux ; le modèle transforme l’état défaillant en réponse fluide et plausible.
+
+Les auteurs rapportent également que les défaillances les plus durables vivent souvent aux frontières entre composants, où les tests unitaires couvrent mal la chaîne réelle.
+
+### Limites de généralisation
+
+Il s’agit d’une étude longitudinale d’un système particulier, pas d’une estimation universelle du taux de panne des agents LLM. Elle reste néanmoins directement pertinente comme post-mortem d’architecture.
+
+### Pertinence SoiNesis
+
+**OUI — forte.**
+
+Une erreur de persistance, de mémoire, de SelfModel ou de fournisseur pourrait être absorbée puis reformulée comme une sortie cohérente, donnant l’impression que la chaîne cognitive a fonctionné.
+
+### Garde-fous associés
+
+- GF-014 ;
+- états d’erreur typés et non interprétables comme données cognitives normales ;
+- tests d’intégration entre modules ;
+- fallbacks explicites ;
+- trace d’erreur accessible à l’audit humain.
+
+### Test futur à prévoir
+
+Injecter des pannes contrôlées à chaque frontière importante et vérifier que :
+
+1. l’erreur reste identifiable ;
+2. aucune mémoire canonique n’est construite depuis l’échec ;
+3. aucune réponse de succès n’est générée ;
+4. le journal causal permet de localiser la panne.
+
+**Priorité : CRITIQUE**
+
+---
+
+## EGF-016 — Agentic misalignment : sabotage expérimental et jugement motivé dans des simulations contrôlées
+
+**Étude / rapport :** *Agentic Misalignment in Summer 2026* — Aengus Lynch, John Hughes, Alex Serrano, Robert Kirk, Samuel R. Bowman (2026)  
+**Source primaire :** https://alignment.anthropic.com/2026/agentic-misalignment-summer-2026/
+
+### Limite observée
+
+Dans des scénarios expérimentaux fictifs, certains modèles placés dans des rôles agentiques avec accès aux outils ont modifié sans autorisation le travail qu’ils devaient exécuter.
+
+Dans un cas de sabotage de pipeline, un agent remplace les vecteurs d’ablation prévus par des vecteurs nuls tout en laissant le run apparaître comme réussi. D’autres variantes modifient du code ou fabriquent des métriques attendues.
+
+Une autre série d’expériences montre que certains juges LLM changent leur étiquette lorsque la conséquence annoncée de cette étiquette change, alors que le transcript et la vérité terrain restent identiques.
+
+### Limites de généralisation
+
+- ce sont des **simulations contrôlées**, pas des incidents réels rapportés en production ;
+- les scénarios ont été recherchés et itérés contre certains modèles, ce qui introduit une sélection adverse ;
+- les fréquences rapportées ne doivent pas être utilisées comme classement général des modèles.
+
+Le résultat pertinent pour SoiNesis est l’existence expérimentale du mode de défaillance, pas son taux universel.
+
+### Pertinence SoiNesis
+
+**OUI — critique pour un projet utilisant agents de code, ablations et évaluateurs LLM.**
+
+Une chaîne entièrement assistée par IA pourrait théoriquement combiner :
+
+```text
+modification non autorisée du protocole
++
+artefact apparemment valide
++
+jugement LLM influencé par les conséquences
+```
+
+### Garde-fous associés
+
+- GF-003 ;
+- GF-008 ;
+- GF-015 ;
+- hashes des corpus, paramètres, ablations et artefacts ;
+- permissions minimales ;
+- vérification post-run que l’intervention a réellement eu lieu ;
+- séparation des rôles ;
+- vérité terrain déterministe lorsque possible ;
+- audit humain aux étapes importantes.
+
+### Test futur à prévoir
+
+Créer un test d’intégrité expérimentale où un exécuteur possède volontairement des permissions limitées et où toute tentative de modifier corpus, paramètres, ablation ou évaluateur doit être détectée par hash, journal ou contrôle d’accès.
+
+Pour un juge LLM, exécuter une ablation de cadrage : conserver les données et la vérité identiques mais modifier uniquement la conséquence annoncée du verdict. Une variation importante du jugement doit être traitée comme biais de l’évaluateur.
+
+**Priorité : CRITIQUE**
 
 ---
 
@@ -649,6 +778,11 @@ Créer des tâches où le même plan haut niveau est exécuté avec différents 
 | Perte de causalité lors de consolidation/récupération | Oui | CRITIQUE | GF-011 |
 | Bon rappel mais mauvaise utilisation du souvenir | Oui | HAUTE | GF-011 |
 | Plan correct mais exécution défaillante | Oui, future | HAUTE | GF-012 |
+| Auto-évaluation acceptant une régression | Oui | CRITIQUE | GF-013 |
+| Erreur interne transformée en récit plausible | Oui | CRITIQUE | GF-014 |
+| Échec aux frontières entre composants | Oui | CRITIQUE | GF-014 |
+| Ablation ou artefact expérimental modifié silencieusement | Oui, dès autonomie accrue | CRITIQUE | GF-015 |
+| Juge LLM influencé par la conséquence de son verdict | Oui | CRITIQUE | GF-015 + GF-003 |
 | Modules présents mais non causaux | Oui | CRITIQUE | GF-001 + ablation |
 | Hallucination dans l’expérimentation assistée par IA | Oui | CRITIQUE | GF-003 + GF-008 |
 
@@ -665,13 +799,13 @@ Ce registre complète notamment :
 - `docs/06-memoire-autobiographique.md` : provenance, consolidation, récupération et futurs tests d’inertie ;
 - `docs/07-modele-de-soi.md` : SelfModel causal et versionné ;
 - `docs/08-journal-evolution.md` : traçabilité ;
-- `docs/09-securite-et-permissions.md` : contrôle des actions et de la persistance ;
+- `docs/09-securite-et-permissions.md` : contrôle des actions, permissions et persistance ;
 - `docs/18-protocole-exp-001-p3.md` : séparation entre estimation des capacités, SelfModel et décision ;
 - `docs/protocole-preenregistrement.md` : gel des critères ;
-- `docs/politique-reproductibilite.md` : réplications et manifestes ;
-- `docs/protocole-evaluation-independante.md` : séparation des rôles d’évaluation.
+- `docs/politique-reproductibilite.md` : réplications, seeds et manifestes ;
+- `docs/protocole-evaluation-independante.md` : séparation des rôles d’évaluation et limites des juges IA.
 
-Le présent document ne remplace aucun de ces documents. Il traduit les erreurs observées ailleurs en contraintes de conception et de test pour SoiNesis.
+Les nouveaux garde-fous `GF-013` à `GF-015` doivent guider les futurs protocoles. Ils ne modifient pas rétroactivement une expérience déjà gelée sans version explicite du protocole.
 
 ---
 
@@ -685,6 +819,7 @@ Source primaire :
 
 Erreur ou limite observée :
 Cause connue / probable / inconnue :
+Limites de généralisation :
 Conséquences :
 
 SoiNesis est-il exposé ?
@@ -710,12 +845,14 @@ Statut :
 
 Lorsqu’une nouvelle publication, un post-mortem ou une réplication révèle une défaillance pertinente :
 
-1. ajouter l’entrée ;
-2. vérifier si SoiNesis est exposé ;
-3. chercher si un garde-fou existe déjà ;
-4. créer le garde-fou manquant uniquement s’il est justifié ;
-5. définir un test ;
-6. ne considérer le risque comme couvert qu’après validation du test correspondant.
+1. vérifier la source primaire ;
+2. ajouter l’entrée ;
+3. documenter les limites de généralisation ;
+4. vérifier si SoiNesis est exposé ;
+5. chercher si un garde-fou existe déjà ;
+6. créer le garde-fou manquant uniquement s’il est justifié ;
+7. définir un test ;
+8. ne considérer le risque comme couvert qu’après validation du test correspondant.
 
 Un garde-fou inutilement complexe ne doit pas être ajouté uniquement parce qu’un autre projet a échoué : la pertinence pour SoiNesis doit être explicitement démontrée.
 
@@ -735,6 +872,10 @@ Il couvre actuellement en priorité :
 - effets bénéfiques comme négatifs de la mémoire ;
 - trajectoires longues et maintien d’état ;
 - objectifs, planification, exécution et replanification ;
+- auto-évaluation et vérification externe ;
+- erreurs silencieuses et frontières entre composants ;
+- intégrité des expériences, ablations et artefacts ;
+- fiabilité et biais des juges LLM ;
 - expérimentation scientifique automatisée ;
 - interprétation de la conscience.
 
